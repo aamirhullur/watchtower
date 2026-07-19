@@ -1,0 +1,181 @@
+# =============================================================================
+# streamwatch configuration (example)
+#
+# Copy to /etc/streamwatch/config.yaml and edit. Non-secret settings only.
+# SECRETS (webhook URLs, API keys, Twitch tokens) come ONLY from the environment
+# via the systemd EnvironmentFile (/etc/streamwatch/env) — never put them here.
+# The env var *names* are configurable below; their *values* live in the env.
+# =============================================================================
+
+# SQLite state database. Must be under a ReadWritePaths dir in the systemd unit.
+state_db: /var/lib/streamwatch/streamwatch.db
+
+# How often to poll YouTube channel /live pages (minutes). Global default; can be
+# overridden per-target below.
+poll_interval_minutes: 10
+
+# How often to post a rolling summary update while a stream is live (minutes).
+update_interval_minutes: 15
+
+# Consecutive fetched-and-not-live YouTube polls required before declaring a
+# stream offline. Fetch errors (429/timeout/non-200) never count, so a transient
+# blip won't trigger a premature digest + duplicate re-announce.
+youtube_offline_confirmations: 2
+
+# Max buffered chat messages per live session before drop-oldest kicks in.
+chat_queue_max: 1000
+
+# Delete chat/transcript/link rows for streams that ended more than this many days
+# ago (pruned at startup + daily). 0 disables retention pruning.
+retention_days: 0   # 0 = keep transcripts/chat/links forever (a 4 h stream ≈ 1.6 MB)
+
+# Optional external YouTube live-chat binary that emits NDJSON lines
+# ({"author":..,"text":..,"ts":..}) on stdout, invoked as:
+#   <binary> --video-id <id> --url <url>
+# Leave empty to run with no YouTube chat (transcript-only summaries).
+youtube_chat_binary: ""
+
+# ----------------------------------------------------------------------------
+# Discord (plain webhooks; no bot token needed — suits an outbound-only box).
+# ----------------------------------------------------------------------------
+discord:
+  # Env var holding the default webhook URL. Used for any purpose without an
+  # explicit override below.
+  default_webhook_env: DISCORD_WEBHOOK_URL
+  # Per-purpose overrides (optional). If set, must be a full webhook URL... but
+  # since URLs are secrets, prefer leaving these empty and routing everything to
+  # $DISCORD_WEBHOOK_URL. (These accept a literal URL only if you accept the
+  # trade-off of a URL in this file.)
+  announce_webhook: ""
+  update_webhook: ""
+  digest_webhook: ""
+  username: streamwatch
+  max_description_chars: 3800
+
+# ----------------------------------------------------------------------------
+# Speech-to-text backend.
+# ----------------------------------------------------------------------------
+stt:
+  backend: whispercpp          # whispercpp | groq
+  # --- whispercpp ---
+  whisper_cli: /opt/whisper/bin/whisper-cli
+  whisper_model: /opt/whisper/models/ggml-base.en.bin
+  whisper_threads: 2           # box has 2 cores
+  # --- groq (optional fallback) ---
+  groq_model: whisper-large-v3-turbo
+  groq_api_key_env: GROQ_API_KEY
+  # If transcription falls this many seconds behind capture, warn (and optionally
+  # skip old chunks to catch up).
+  lag_warn_seconds: 180
+  skip_when_lagging: false
+  # Hard timeout (s) for a single transcription subprocess. 0 => derived as
+  # max(120, 4 * capture.segment_seconds) so a wedged whisper-cli can't hang.
+  chunk_timeout_seconds: 0
+
+# ----------------------------------------------------------------------------
+# LLM summarization backend (the key pluggable piece).
+# ----------------------------------------------------------------------------
+llm:
+  backend: claude_cli          # claude_cli | codex_cli | none
+  # claude aliases: haiku | sonnet | opus. For codex_cli, a real model id.
+  model: haiku
+  # Optional stronger model for final/refined digests only ("" = same as model).
+  # Rolling updates fire ~every 15 min (cheap model is fine); digests happen once
+  # or twice per stream and read much better from sonnet/opus.
+  digest_model: sonnet
+  # Reasoning effort for the digest model (sonnet/opus accept low..max; haiku
+  # does not — leave `effort` empty when model is haiku).
+  digest_effort: high
+  effort: ""
+  # Binary path; empty => `claude` / `codex` on PATH.
+  binary: ""
+  timeout_seconds: 120
+  # Dedicated empty cwd for the LLM CLI subprocess (prompt-injection containment).
+  # Empty => <state_db dir>/llm, created at startup. The CLI is also invoked with
+  # tools disabled + a single turn, so untrusted transcript/chat text can't drive
+  # the agent into reading local files or exfiltrating secrets.
+  workdir: ""
+  style: "Be concise and factual. Prefer bullet points. Never invent details."
+
+# ----------------------------------------------------------------------------
+# Capture (yt-dlp/streamlink -> ffmpeg rolling WAV segments).
+# ----------------------------------------------------------------------------
+capture:
+  workdir: /var/lib/streamwatch/work
+  segment_seconds: 60          # rolling chunk length
+  sample_rate: 16000           # mono 16kHz for whisper
+  keep_chunks: false           # keep WAVs after transcription (debug)
+  yt_dlp: yt-dlp
+  streamlink: streamlink
+  ffmpeg: ffmpeg
+  # Proxy for yt-dlp YouTube operations only (live capture + VOD caption fetch).
+  # YouTube bot-checks media requests from datacenter IPs. Route yt-dlp through
+  # Cloudflare WARP via a local wireproxy instance (free, no account, userspace):
+  #   proxy: http://127.0.0.1:25345      (wireproxy [http] bound to a wgcf profile)
+  # Use the HTTP listener, not SOCKS5: yt-dlp hands live-HLS downloads to ffmpeg,
+  # which only honors HTTP proxies. Validated 2026-07-19 on OCI: metadata, VOD
+  # captions, VOD media (~15 MB/s) and live capture all pass with no cookies.
+  # Empty = direct connection. Twitch/streamlink is not proxied (not blocked).
+  proxy: ""
+  # Fallback only, if the WARP egress ever gets flagged: Netscape cookies.txt
+  # exported from a THROWAWAY Google account logged into YouTube (never your
+  # real account). chmod 600, owned by the service user.
+  # e.g. /etc/streamwatch/yt-cookies.txt
+  cookies_file: ""
+  restart_backoff_seconds: 5
+  max_restart_backoff_seconds: 60
+
+# ----------------------------------------------------------------------------
+# Post-stream refined digest (YouTube VOD auto-captions).
+# ----------------------------------------------------------------------------
+refined_digest:
+  enabled: true
+  delay_minutes: 30            # wait after stream end before pulling captions
+  retry_delay_minutes: 30     # single retry if captions not ready yet
+
+# ----------------------------------------------------------------------------
+# Health: heartbeat file + optional ntfy alerting.
+# ----------------------------------------------------------------------------
+health:
+  heartbeat_file: /var/lib/streamwatch/heartbeat
+  heartbeat_interval_seconds: 30
+  ntfy:
+    enabled: false
+    url: ""                    # e.g. https://ntfy.example.ts.net/alerts
+    token_env: NTFY_TOKEN
+    failure_threshold: 3       # consecutive failures before an alert
+
+# ----------------------------------------------------------------------------
+# Twitch app credentials come from the environment; these name the env vars.
+# Websocket EventSub REQUIRES a user access token (app tokens are rejected), so
+# TWITCH_BOT_TOKEN / TWITCH_BOT_REFRESH must hold a user token + refresh token.
+# ----------------------------------------------------------------------------
+twitch_client_id_env: TWITCH_CLIENT_ID
+twitch_client_secret_env: TWITCH_CLIENT_SECRET
+twitch_bot_token_env: TWITCH_BOT_TOKEN
+twitch_bot_refresh_env: TWITCH_BOT_REFRESH
+
+# ----------------------------------------------------------------------------
+# Channels to watch. platform: youtube|twitch.
+#   youtube -> handle is the @handle (with or without the leading @).
+#   twitch  -> handle is the channel login name.
+# Per-channel overrides: poll_interval_minutes, update_interval_minutes, enabled.
+# ----------------------------------------------------------------------------
+watch:
+  - platform: youtube
+    handle: "@somechannel"
+    name: "Some Channel"
+    poll_interval_minutes: 5
+
+  - platform: youtube
+    handle: "SomeCreator"          # leading @ optional
+    name: "Some Creator"
+
+  - platform: twitch
+    handle: "somestreamer"
+    name: "Some Streamer"
+    update_interval_minutes: 10
+
+  - platform: twitch
+    handle: "somestreamer"
+    enabled: false                 # temporarily disabled

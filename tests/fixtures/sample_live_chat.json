@@ -1,0 +1,7 @@
+{"replayChatItemAction": {"actions": [{"addChatItemAction": {"item": {"liveChatTextMessageRenderer": {"message": {"runs": [{"text": "hello check "}, {"text": "https://example.com/tool"}]}, "authorName": {"simpleText": "Alice"}, "authorExternalChannelId": "UCaaa"}}}}], "videoOffsetTimeMsec": "5000"}}
+{"replayChatItemAction": {"actions": [{"addChatItemAction": {"item": {"liveChatTextMessageRenderer": {"message": {"runs": [{"emoji": {"emojiId": "smile"}}]}, "authorName": {"simpleText": "Bob"}}}}}], "videoOffsetTimeMsec": 8000}}
+{"replayChatItemAction": {"actions": [{"addChatItemAction": {"item": {"liveChatMembershipItemRenderer": {"authorName": {"simpleText": "Carol"}, "headerSubtext": {"runs": [{"text": "Welcome to the channel"}]}}}}}], "videoOffsetTimeMsec": "9000"}}
+{"replayChatItemAction": {"actions": [{"addChatItemAction": {"item": {"liveChatTextMessageRenderer": {"message": {"runs": [{"text": "gg "}, {"emoji": {"emojiId": "fire"}}, {"text": "wp"}]}, "authorName": {"simpleText": "Dave"}}}}}], "videoOffsetTimeMsec": 12000}}
+{"replayChatItemAction": {"actions": [{"addChatItemAction": {"item": {"liveChatTextMessageRenderer": {"message": {"runs": [{"text": "no name here"}]}, "authorExternalChannelId": "UCzzz"}}}}], "videoOffsetTimeMsec": "3000"}}
+
+not valid json at all

@@ -1,0 +1,146 @@
+# streamwatch
+
+A self-hosted asyncio daemon that watches livestream channels (YouTube + Twitch),
+detects go-live, captures audio + chat, transcribes locally, and posts rolling
+updates plus a final digest to Discord via webhooks.
+
+Built to run unattended on a small ARM64 VM (Ubuntu 24.04, 2 cores / 12 GB)
+behind Tailscale, outbound-only, as a hardened non-root systemd service.
+
+## What it does
+
+- **Detects go-live**
+  - YouTube: polls `https://www.youtube.com/@<handle>/live` with a browser UA and
+    parses the page for `isLive` + the canonical watch URL. No API key.
+  - Twitch: EventSub over WebSocket via TwitchIO v3 (`stream.online` /
+    `stream.offline`). Websocket transport needs no public callback URL.
+- **Captures** the live audio (`yt-dlp` for YouTube, `streamlink` for Twitch)
+  piped into `ffmpeg -f segment` → rolling 60s mono 16 kHz WAV chunks. The
+  capture subprocess is supervised and restarted on crash while still live.
+- **Transcribes** each chunk locally with **whisper.cpp** (`whisper-cli`), or
+  optionally **Groq** Whisper as a fallback.
+- **Ingests chat** — Twitch via TwitchIO; YouTube via an optional external
+  NDJSON-emitting binary (absent → transcript-only). URLs are extracted into a
+  `links` table.
+- **Summarizes** every ~15 min while live and posts a rolling Discord update; on
+  stream end it posts a final digest (topics, timeline, all product/tool links).
+  Summaries come from a pluggable **LLM backend**:
+  - `claude_cli` — headless Claude Code CLI, locked down for untrusted input
+    (`claude -p --model haiku --output-format text --disallowedTools "*" --max-turns 1 --setting-sources none`, run in an isolated empty cwd)
+  - `codex_cli` — headless OpenAI Codex CLI (`codex exec --model … -`)
+  - `none` — stats + links only.
+  If the LLM times out or fails, the update still goes out as a stats-only post.
+- **Refined digest** (YouTube): ~30 min after a stream ends it pulls the VOD
+  auto-captions (`yt-dlp --write-auto-subs`), which are far cleaner than live STT,
+  regenerates the digest, and reposts it marked *refined*.
+- **Health**: heartbeat file for an external watchdog + optional ntfy alerts on
+  capture/transcribe/LLM crash-loops.
+
+X/Twitter/Nitter watching is intentionally out of scope for v1; the poller
+architecture stays module-friendly so it can be added later.
+
+## Architecture
+
+```
+                                  ┌──────────────────────────────────────────┐
+                                  │              streamwatch (1 asyncio proc) │
+                                  │                                            │
+   YouTube /live poll ─┐          │  ┌────────────┐   go-live   ┌───────────┐ │
+                       ├─ detect ─┼─▶│  Detectors │────────────▶│  Stream   │ │
+   Twitch EventSub ────┘          │  └────────────┘             │  Session  │ │
+        (websocket)               │                             │ (per live)│ │
+                                  │                             └─────┬─────┘ │
+                                  │        ┌──────────────────────────┼─────┐ │
+                                  │        ▼            ▼             ▼     ▼ │
+                                  │   ┌─────────┐ ┌──────────┐ ┌────────┐ ┌─────────┐
+   yt-dlp/streamlink │ ffmpeg ───▶│   │ Capture │ │Transcribe│ │  Chat  │ │Summarize│
+        60s WAV segments          │   │ supervis│ │whisper.cpp│ │ ingest │ │  loop   │
+                                  │   └────┬────┘ └────┬─────┘ └───┬────┘ └────┬────┘
+                                  │        │ chunks    │ text      │ msgs      │ prompt
+                                  │        └───────────┴───────────┴──────┐    ▼
+                                  │                                       ▼  ┌──────────┐
+                                  │                             ┌──────────┐ │   LLM    │
+                                  │                             │  SQLite  │ │ backend  │
+                                  │                             │  state   │ │(claude / │
+                                  │                             └──────────┘ │ codex /  │
+                                  │                                          │  none)   │
+                                  │   ┌─────────┐   embeds                   └────┬─────┘
+                                  │   │ Health  │        ┌──────────────────┐     │
+                                  │   │heartbeat│        │  Discord poster  │◀────┘
+                                  │   │ + ntfy  │        │  (webhooks, 429) │
+                                  │   └─────────┘        └────────┬─────────┘
+                                  └───────────────────────────────┼───────────┘
+                                                                  ▼
+                                             go-live · rolling update · final · refined
+```
+
+## Quickstart (local dev)
+
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e '.[twitch,dev]'          # drop [twitch] for YouTube-only
+
+# Validate a config and see which env secrets are missing:
+streamwatch check-config --config config/config.example.yaml
+
+# Post a hello embed (needs $DISCORD_WEBHOOK_URL):
+export DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+streamwatch test-webhook --config config/config.example.yaml
+
+# End-to-end acceptance test — run the FULL pipeline on a local file or VOD URL,
+# printing updates instead of posting:
+streamwatch simulate --config config/config.example.yaml --dry-run some_talk.mp4
+streamwatch simulate --config config/config.example.yaml --dry-run \
+  'https://www.youtube.com/watch?v=VIDEO_ID'
+
+# Run the daemon:
+streamwatch run --config config/config.example.yaml
+```
+
+`simulate` chunks the input faster-than-realtime and treats every couple of
+minutes of audio as one "window", so you can exercise capture → transcribe →
+summarize → digest in seconds without a live stream. Tune with `--window-chunks`.
+
+## Configuration
+
+Everything non-secret lives in the YAML (`--config`); see the fully-commented
+[`config/config.example.yaml`](config/config.example.yaml). Highlights:
+
+| Key | Meaning |
+| --- | --- |
+| `poll_interval_minutes` | YouTube `/live` poll cadence (per-target override allowed) |
+| `update_interval_minutes` | Rolling summary cadence while live |
+| `stt.backend` | `whispercpp` \| `groq` |
+| `stt.whisper_cli` / `whisper_model` | Paths to the whisper.cpp binary + GGML model |
+| `llm.backend` | `claude_cli` \| `codex_cli` \| `none` |
+| `llm.model` | Claude alias (`haiku`/`sonnet`/`opus`) or Codex model id |
+| `capture.segment_seconds` | Chunk length (default 60) |
+| `refined_digest.*` | YouTube VOD-caption re-digest timing |
+| `health.ntfy.*` | Optional push alerts on crash-loops |
+| `watch:` | List of channels (`platform`, `handle`, per-channel overrides) |
+
+**Secrets are never read from YAML.** They come from the environment (systemd
+`EnvironmentFile`): `DISCORD_WEBHOOK_URL`, `TWITCH_CLIENT_ID` /
+`TWITCH_CLIENT_SECRET` / `TWITCH_BOT_TOKEN` / `TWITCH_BOT_REFRESH`,
+`GROQ_API_KEY`, `NTFY_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`. The YAML only names the
+env vars.
+
+## State
+
+SQLite (`state_db`) with tables: `streams`, `transcript_chunks`, `chat_messages`,
+`links`, `updates_posted`.
+
+## Deployment
+
+See [`deploy/install.md`](deploy/install.md) and the hardened
+[`deploy/streamwatch.service`](deploy/streamwatch.service) unit.
+
+## Tests
+
+```bash
+python -m pytest
+```
+
+No network required: config parsing, window assembly/dedup, YouTube live-page
+parsing (HTML fixtures), whisper output parsing, VTT caption parsing, LLM backend
+argv construction, and Discord embed building.

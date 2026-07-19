@@ -1,0 +1,89 @@
+# /etc/systemd/system/streamwatch.service
+#
+# Hardened unit for the streamwatch daemon. Runs as a dedicated non-root user on
+# Ubuntu 24.04 ARM64. See deploy/install.md for setup.
+
+[Unit]
+Description=streamwatch livestream watcher + Discord digest bot
+Documentation=https://github.com/local/streamwatch
+After=network-online.target wireproxy.service
+Wants=network-online.target wireproxy.service
+
+[Service]
+Type=simple
+User=streamwatch
+Group=streamwatch
+
+# Run from the private state dir (also the LLM CLI's isolated cwd lives under here).
+WorkingDirectory=/var/lib/streamwatch
+
+# The venv's console script. Config path is a non-secret argument.
+ExecStart=/opt/streamwatch/venv/bin/streamwatch --log-level INFO run --config /etc/streamwatch/config.yaml
+
+# Secrets (DISCORD_WEBHOOK_URL, TWITCH_*, GROQ_API_KEY, NTFY_TOKEN,
+# CLAUDE_CODE_OAUTH_TOKEN, ...) live here, root-owned 0640. Never in the YAML.
+EnvironmentFile=/etc/streamwatch/env
+
+# --- Restart policy ---
+Restart=on-failure
+RestartSec=10
+# Graceful shutdown: the app traps SIGTERM, stops captures, flushes, exits.
+KillSignal=SIGTERM
+TimeoutStopSec=90
+
+# --- Scheduling: be a polite background citizen on a 2-core box ---
+Nice=10
+CPUWeight=50
+IOWeight=50
+
+# --- Sandboxing / hardening ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+# Carve out a private state dir (created + owned automatically under /var/lib).
+StateDirectory=streamwatch
+StateDirectoryMode=0750
+# Explicit writable paths (StateDirectory already grants /var/lib/streamwatch).
+ReadWritePaths=/var/lib/streamwatch
+# Give the service its own home so tools (yt-dlp, claude, codex) have a cache dir
+# without exposing the real user home (ProtectHome=yes hides /home).
+Environment=HOME=/var/lib/streamwatch
+# whisper-cli's RUNPATH points at its (hidden) build dir; its shared libs are
+# co-located in /opt/whisper/bin instead.
+Environment=LD_LIBRARY_PATH=/opt/whisper/bin
+# claude is a node script (system npm -g install); node lives under /opt.
+Environment=PATH=/opt/node-v24.12.0/bin:/usr/local/bin:/usr/bin:/bin
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+# Only the service's own processes are visible in /proc.
+ProcSubset=pid
+# Don't share a kernel keyring with the rest of the system.
+KeyringMode=private
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+# Drop all capabilities — the service needs none.
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Restrict address families to what aiohttp/subprocess networking needs.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077
+
+# --- Resource caps (12 GB box; leave headroom) ---
+MemoryMax=6G
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

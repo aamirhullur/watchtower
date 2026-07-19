@@ -1,0 +1,4 @@
+[00:00:00.000 --> 00:00:04.000]  Welcome back everyone to the stream today.
+[00:00:04.000 --> 00:00:08.000]  We are going to check out https://example.com/tool
+[00:00:08.000 --> 00:00:11.000]  [BLANK_AUDIO]
+[00:00:11.000 --> 00:00:15.000]  and talk about the new release.

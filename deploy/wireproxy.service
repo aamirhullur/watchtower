@@ -1,0 +1,59 @@
+# /etc/systemd/system/wireproxy.service
+#
+# Userspace WireGuard tunnel to Cloudflare WARP, exposing loopback-only
+# SOCKS5 (:25344) and HTTP CONNECT (:25345) proxies. yt-dlp/ffmpeg use the
+# HTTP listener for all YouTube traffic (datacenter-IP bot-wall bypass —
+# see deploy/install.md). No root, no tun device: everything in userspace.
+
+[Unit]
+Description=wireproxy WARP egress for streamwatch (userspace WireGuard proxy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=streamwatch
+Group=streamwatch
+ExecStart=/opt/wireproxy/wireproxy -c /etc/streamwatch/wireproxy.conf
+
+Restart=on-failure
+RestartSec=5
+
+# --- Hardening (mirrors streamwatch.service where applicable) ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+KeyringMode=private
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+# UDP to the WARP endpoint + TCP listeners on loopback. AF_NETLINK is required:
+# Go's net package enumerates interfaces via netlink route sockets, and
+# wireguard-go's bind fails with EAFNOSUPPORT without it.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077
+
+# --- Resource caps: it's a packet pump, keep it tiny ---
+MemoryMax=256M
+TasksMax=32
+CPUWeight=50
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
