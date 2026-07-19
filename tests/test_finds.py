@@ -252,9 +252,9 @@ def test_finds_field_renders_name_detail_link():
     )
     field = _finds_field(finds)
     assert field["name"] == "🔎 Finds"
-    assert "**K8 Plus** — a mini pc [↗](https://y?t=30s)" in field["value"]
+    assert "**K8 Plus**: a mini pc [↗](https://y?t=30s)" in field["value"]
     # No link markup when deeplink is empty.
-    assert "**NoLink** — no deeplink here" in field["value"]
+    assert "**NoLink**: no deeplink here" in field["value"]
     assert "[↗]()" not in field["value"]
 
 
@@ -317,9 +317,9 @@ def test_finds_embed_renders_all_25_in_description():
         for i in range(25)
     )
     e = render_finds_recap(FindsRecap(channel="C", title="Stream T", url="https://u", finds=finds))
-    assert e["title"].startswith("🔎 Finds — Stream T")
+    assert e["title"].startswith("🔎 Finds: Stream T")
     for i in range(25):
-        assert f"**tool{i}** — detail {i} [↗](https://y?t={i}s)" in e["description"]
+        assert f"**tool{i}**: detail {i} [↗](https://y?t={i}s)" in e["description"]
     assert len(e["description"]) <= 4096
 
 
@@ -343,7 +343,7 @@ def test_finds_embed_no_link_markup_when_deeplink_empty():
     e = render_finds_recap(
         FindsRecap(channel="C", title="T", url="", finds=(Find(name="K8 Plus", detail="mini pc"),))
     )
-    assert "**K8 Plus** — mini pc" in e["description"]
+    assert "**K8 Plus**: mini pc" in e["description"]
     assert "[↗]" not in e["description"]
 
 
@@ -468,7 +468,7 @@ async def test_post_digest_posts_followup_finds_message(tmp_path):
         # Render at the delivery boundary to confirm the embed content is intact.
         finds_embed = render_finds_recap(recap)
         assert finds_embed["title"].startswith("🔎 Finds")
-        assert "**K8 Plus** — mini pc" in finds_embed["description"]
+        assert "**K8 Plus**: mini pc" in finds_embed["description"]
         # Deep link from offset 60 -> t=30s.
         assert "t=30s" in finds_embed["description"]
     finally:
@@ -482,7 +482,7 @@ async def test_post_digest_refined_skips_finds_message(tmp_path):
         poster = StubPoster()
         s = Summarizer(Config(), db=db, llm=FakeLLM(text="refined text"), poster=poster)  # type: ignore[arg-type]
         assert await s.post_digest(sid, target, refined=True)
-        # Only the refined digest — no standalone finds recap follows it.
+        # Only the refined digest; no standalone finds recap follows it.
         assert [type(n).__name__ for n in poster.posts] == ["Digest"]
         assert poster.posts[0].refined is True
     finally:

@@ -3,9 +3,9 @@
 A self-hosted information-gathering daemon. Point it at sources you care about
 and it turns them into structured, searchable knowledge: a permanent SQLite
 database of transcripts, chat, links, summaries, and 🔎 finds (products, tools,
-ideas worth knowing about). That store is the product — plain SQLite, queryable
-by anything. Notifications — rolling updates while live, digests, and finds
-recaps — currently ship to Discord via webhooks, but Discord is only the current
+ideas worth knowing about). That store is the product: plain SQLite, queryable
+by anything. Notifications (rolling updates while live, digests, and finds
+recaps) currently ship to Discord via webhooks, but Discord is only the current
 delivery adapter over the store.
 
 The first source module is **livestreams** (YouTube + Twitch): it detects
@@ -28,7 +28,7 @@ behind Tailscale, outbound-only, as a hardened non-root systemd service.
   capture subprocess is supervised and restarted on crash while still live.
 - **Transcribes** each chunk locally with **whisper.cpp** (`whisper-cli`), or
   optionally **Groq** Whisper as a fallback.
-- **Ingests chat** — Twitch via TwitchIO; YouTube via an optional external
+- **Ingests chat**: Twitch via TwitchIO; YouTube via an optional external
   NDJSON-emitting binary (absent → transcript-only). URLs are extracted into a
   `links` table.
 - **Summarizes** every ~15 min while live and posts a rolling Discord update; on
@@ -36,18 +36,18 @@ behind Tailscale, outbound-only, as a hardened non-root systemd service.
   Long transcripts are map-reduce condensed first so a 4 h stream's digest sees
   the whole stream, not the first 40 min. Summaries come from a pluggable
   **LLM backend**:
-  - `claude_cli` — headless Claude Code CLI, locked down for untrusted input
+  - `claude_cli`: headless Claude Code CLI, locked down for untrusted input
     (`claude -p --model haiku --output-format text --disallowedTools "*" --max-turns 1 --setting-sources ""`, run in an isolated empty cwd)
-  - `codex_cli` — headless OpenAI Codex CLI (`codex exec --model … -`)
-  - `none` — stats + links only.
+  - `codex_cli`: headless OpenAI Codex CLI (`codex exec --model … -`)
+  - `none`: stats + links only.
   A cheap model handles rolling updates while `llm.digest_model` (+
   `digest_effort`) can route digests to a stronger one. If the LLM times out or
   fails, the update still goes out as a stats-only post.
-- **🔎 Finds** — the discovery layer. Each window gets a second cheap-LLM pass
+- **🔎 Finds**: the discovery layer. Each window gets a second cheap-LLM pass
   extracting concrete discoverables (products, tools, games, benchmarks,
   recommendations) as structured JSON: stored forever in a `finds` table,
   surfaced on every rolling update (top 5, with YouTube `&t=` deep links), and
-  recapped as a standalone deduped message after the final digest — the point
+  recapped as a standalone deduped message after the final digest. The point
   is learning about things like a "GMKtec K8 Plus" without watching the stream.
 - **Refined digest** (YouTube): ~30 min after a stream ends it pulls the VOD
   auto-captions (`yt-dlp --write-auto-subs`), which are far cleaner than live STT,
@@ -57,7 +57,7 @@ behind Tailscale, outbound-only, as a hardened non-root systemd service.
 - **YouTube from a datacenter IP**: YouTube bot-walls media requests from VPS
   ranges. watchtower tunnels yt-dlp traffic through **Cloudflare WARP** via
   [wireproxy](https://github.com/whyvl/wireproxy) (free, userspace, no root, no
-  cookies, no Google account) — set `capture.proxy: http://127.0.0.1:25345`.
+  cookies, no Google account). Set `capture.proxy: http://127.0.0.1:25345`.
   See `deploy/install.md`. Validated on metadata, VOD captions, VOD media and
   live HLS capture. Twitch needs no proxy.
 
@@ -109,7 +109,7 @@ watchtower check-config --config config/config.example.yaml
 export DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 watchtower test-webhook --config config/config.example.yaml
 
-# End-to-end acceptance test — run the FULL pipeline on a local file or VOD URL,
+# End-to-end acceptance test: run the FULL pipeline on a local file or VOD URL,
 # printing updates instead of posting:
 watchtower simulate --config config/config.example.yaml --dry-run some_talk.mp4
 watchtower simulate --config config/config.example.yaml --dry-run \
@@ -153,7 +153,7 @@ env vars.
 
 SQLite (`state_db`) with tables: `streams`, `transcript_chunks`, `chat_messages`,
 `links`, `finds`, `updates_posted`. With `retention_days: 0` everything is kept
-forever (a 4 h stream ≈ 1.6 MB) — the transcript + chat + finds corpus is a
+forever (a 4 h stream ≈ 1.6 MB). The transcript + chat + finds corpus is a
 deliberate long-term asset.
 
 ## Deployment

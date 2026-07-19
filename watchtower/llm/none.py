@@ -1,7 +1,7 @@
 """No-LLM backend: signals the summarizer to build a stats-only update.
 
 Returns ok=False with a sentinel error so the summarizer takes its stats-only
-path. This keeps the code path identical to a real backend failing — the update
+path. This keeps the code path identical to a real backend failing: the update
 still goes out, just without prose.
 """
 

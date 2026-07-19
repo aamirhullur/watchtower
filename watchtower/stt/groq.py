@@ -1,7 +1,7 @@
 """Groq Whisper API backend (optional fallback).
 
 Uses Groq's OpenAI-compatible audio transcription endpoint. Key comes from the
-env var named by ``SttConfig.groq_api_key_env`` (default ``GROQ_API_KEY``) — never
+env var named by ``SttConfig.groq_api_key_env`` (default ``GROQ_API_KEY``), never
 from YAML.
 """
 

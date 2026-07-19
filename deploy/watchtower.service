@@ -71,7 +71,7 @@ RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=no
-# Drop all capabilities — the service needs none.
+# Drop all capabilities; the service needs none.
 CapabilityBoundingSet=
 AmbientCapabilities=
 # Restrict address families to what aiohttp/subprocess networking needs.

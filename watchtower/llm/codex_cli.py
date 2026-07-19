@@ -11,8 +11,8 @@ Verified against the official docs (developers.openai.com / learn.chatgpt.com
   (docs: "use ``codex exec -`` when stdin should become the full prompt"). This
   also sidesteps the documented hang where a positional prompt in a non-TTY child
   process waits forever on stdin EOF (openai/codex#20919, #27019).
-* ``--sandbox read-only`` — summarization needs no writes; read-only never prompts.
-* ``--skip-git-repo-check`` — we run outside a git repo.
+* ``--sandbox read-only``: summarization needs no writes; read-only never prompts.
+* ``--skip-git-repo-check``: we run outside a git repo.
 * ``--model`` sets the model (a real model id, not an alias).
 
 On timeout / non-zero exit we return ``LLMResult(ok=False)`` so the summarizer

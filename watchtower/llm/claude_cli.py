@@ -8,7 +8,7 @@ Verified against the official docs (https://code.claude.com/docs/en/headless):
   result. The prompt is piped on **stdin** (docs: "Non-interactive mode reads
   stdin, so you can pipe data in") which avoids ARG_MAX limits on long windows.
 * ``--model`` accepts aliases ``haiku`` / ``sonnet`` / ``opus`` (docs show
-  ``/model sonnet``). Default here is ``haiku`` — cheap and fast, plenty for
+  ``/model sonnet``). Default here is ``haiku``: cheap and fast, plenty for
   summarization.
 * ``--output-format text`` (default) => plain text on stdout.
 * We deliberately do NOT pass ``--bare``: bare mode skips OAuth/keychain and

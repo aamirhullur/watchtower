@@ -5,7 +5,7 @@ transport (no public callback URL required).
 
 Verified against TwitchIO 3.x docs (twitchio.dev, stable) and Twitch EventSub docs:
 
-* ``twitchio.Client(client_id=..., client_secret=..., bot_id=...)`` — app creds.
+* ``twitchio.Client(client_id=..., client_secret=..., bot_id=...)``: app creds.
 * Websocket EventSub **requires a user access token** (app tokens are rejected).
   We register one with ``client.add_token(token, refresh)`` from env-provided
   secrets, then subscribe with ``token_for=<user_id>``.
@@ -22,7 +22,7 @@ one-time user-token bootstrap.
 VERIFIED LIVE 2026-07-19 against TwitchIO 3.2.2 + real Twitch EventSub (smoke
 test on the VM): ``login()`` → ``add_token(token, refresh)`` (response carries
 ``user_id`` of the token owner) → ``subscribe_websocket(payload, token_for=<token
-owner uid>)``. Subscriptions authorized by the *token owner's* uid — NOT the
+owner uid>)``. Subscriptions authorized by the *token owner's* uid, NOT the
 broadcaster's. Chat arrives as ``event_message`` with a
 ``twitchio.models.eventsub_.ChatMessage`` payload (``.broadcaster``, ``.chatter``,
 ``.text``). No ``client.start()`` needed: the websocket lives once subscribed.
@@ -131,7 +131,7 @@ class TwitchDetector:
         try:
             await client.login()
             # Register the user token used for websocket subscriptions. The
-            # response identifies the token owner — the uid that authorizes
+            # response identifies the token owner: the uid that authorizes
             # every subscription (verified live: token_for = token owner).
             resp = await client.add_token(user_token, user_refresh)
             bot_uid = str(getattr(resp, "user_id", "") or "")

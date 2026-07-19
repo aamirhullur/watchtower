@@ -1,7 +1,7 @@
 """LLM backend interface.
 
 All backends take a prompt string and return an ``LLMResult``. Backends must never
-raise on model/timeout failure that the caller can recover from — instead they
+raise on model/timeout failure that the caller can recover from. Instead they
 return ``LLMResult(ok=False, ...)`` so the summarizer can fall back to a stats-only
 post and still get an update out. Only misconfiguration raises ``LLMError``.
 """

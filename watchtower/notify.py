@@ -2,7 +2,7 @@
 
 The domain emits these adapter-agnostic payloads; a delivery adapter (currently
 ``discord.py``) renders each for its channel. Nothing here knows how they are
-rendered or delivered — no embeds, wire formats, or size caps, only source-domain
+rendered or delivered: no embeds, wire formats, or size caps, only source-domain
 terms. Swap in a different adapter and this model stays untouched.
 """
 

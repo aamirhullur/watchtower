@@ -188,8 +188,8 @@ class CaptureSession:
     async def _run_pipeline_once(self) -> int:
         """Run one downloader|ffmpeg pipeline generation. Returns ffmpeg's rc.
 
-        The whole body is wrapped in try/finally so that on ANY exit path —
-        normal end, error, or task cancellation (CancelledError) — BOTH the
+        The whole body is wrapped in try/finally so that on ANY exit path
+        (normal end, error, or task cancellation via CancelledError) BOTH the
         downloader and ffmpeg are terminated (then killed after a grace period).
         Without this, cancelling the capture task leaked orphaned processes that
         kept the stream open forever.
@@ -197,7 +197,7 @@ class CaptureSession:
         out_pattern = str(self._gen_dir() / "chunk_%05d.wav")
         dl_argv = build_downloader_argv(self.cfg, self.platform, self.url)
         ff_argv = build_ffmpeg_segment_argv(self.cfg, out_pattern, from_stdin=True)
-        # Media tools never need process secrets — pass a scrubbed env.
+        # Media tools never need process secrets. Pass a scrubbed env.
         env = minimal_env()
 
         read_fd: int | None

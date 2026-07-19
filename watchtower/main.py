@@ -5,7 +5,7 @@ Subcommands:
   check-config  Validate a config file and report missing env secrets.
   test-webhook  Post a hello embed to the configured Discord webhook.
   simulate      Run the full pipeline against a local file or YouTube VOD URL
-                (no live stream needed) — the end-to-end acceptance test.
+                (no live stream needed): the end-to-end acceptance test.
 """
 
 from __future__ import annotations

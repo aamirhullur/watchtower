@@ -12,7 +12,7 @@ sudo apt install -y python3.12 python3.12-venv ffmpeg
 sudo apt install -y pipx
 pipx install yt-dlp
 pipx install streamlink            # only if you watch Twitch
-# (or install yt-dlp/streamlink into the service venv instead — see step 4)
+# (or install yt-dlp/streamlink into the service venv instead; see step 4)
 ```
 
 ### whisper.cpp (STT)
@@ -31,7 +31,7 @@ sudo bash ./models/download-ggml-model.sh base.en-q5_1 /opt/whisper/models
 ```
 
 Point `stt.whisper_cli` and `stt.whisper_model` in the config at these paths
-(model: `ggml-base.en-q5_1.bin` — benchmarked 4.6x realtime / 14.2% WER on
+(model: `ggml-base.en-q5_1.bin`, benchmarked 4.6x realtime / 14.2% WER on
 2×Ampere Altra, beating small.en on both axes).
 
 ### YouTube egress (Cloudflare WARP via wireproxy)
@@ -42,7 +42,7 @@ proxy. No cookies, no Google account, no root, no tun device.
 
 ```bash
 # 1. Generate a WARP profile with wgcf. NOTE: Cloudflare 429s registration from
-#    datacenter IPs — run register/generate on any other machine and copy the
+#    datacenter IPs, so run register/generate on any other machine and copy the
 #    two files over if needed.
 wgcf register --accept-tos && wgcf generate     # -> wgcf-profile.conf
 sudo install -m 0640 -o root -g watchtower wgcf-profile.conf /etc/watchtower/
@@ -65,7 +65,7 @@ sudo systemctl enable --now wireproxy
 curl -x http://127.0.0.1:25345 https://www.cloudflare.com/cdn-cgi/trace | grep warp=on
 ```
 
-Set `capture.proxy: http://127.0.0.1:25345` in the config — the **HTTP**
+Set `capture.proxy: http://127.0.0.1:25345` in the config, using the **HTTP**
 listener, not SOCKS5, because yt-dlp delegates live-HLS downloads to ffmpeg,
 which only honors HTTP proxies. Twitch/streamlink stays unproxied.
 
@@ -136,7 +136,7 @@ sudo chown root:root /etc/watchtower/env
 
 > **Why `0600 root:root` and not `0640 root:watchtower`?** systemd reads
 > `EnvironmentFile=` as **root** and injects the values into the service's
-> environment itself — the `watchtower` user never needs to read the file. Making
+> environment itself; the `watchtower` user never needs to read the file. Making
 > it group-readable by `watchtower` would let a compromised service process (or
 > anything it spawns) read every secret straight off disk. Keep it root-only.
 
@@ -153,7 +153,7 @@ against your installed version before first run.)
 ## 6. Validate before starting
 
 Load the secrets inside a **root subshell** (`set -a; . env`) and drop to the
-service user with `runuser`. This keeps secrets out of any process's argv — the
+service user with `runuser`. This keeps secrets out of any process's argv; the
 `env $(cat …)` form exposes every secret in `/proc/<pid>/cmdline`, readable by any
 local user.
 

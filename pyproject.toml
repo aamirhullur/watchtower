@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "watchtower"
 version = "0.1.0"
-description = "Self-hosted daemon that turns livestreams into structured knowledge — local Whisper transcription, LLM rolling summaries, and a permanent database of finds."
+description = "Self-hosted daemon that turns livestreams into structured knowledge: local Whisper transcription, LLM rolling summaries, and a permanent database of finds."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

@@ -27,7 +27,7 @@ DIGEST_CHAT_LIMIT = 500
 # A digest prompt can hold this much transcript. Multi-hour streams far exceed it
 # (4 h of speech ≈ 140k chars), so anything longer is map-reduced first: the
 # transcript is condensed segment-by-segment through the LLM, then the digest is
-# written from the condensations — otherwise the digest only ever sees the head
+# written from the condensations. Otherwise the digest only ever sees the head
 # of the stream and silently drops the rest.
 DIGEST_TRANSCRIPT_CAP = 24000
 DIGEST_SEGMENT_CHARS = 18000
@@ -188,7 +188,7 @@ def build_finds_prompt(*, window: Window, style: str) -> str:
         '"name": "the specific name", '
         '"detail": "one sentence of what was said about it", '
         '"sentiment": "positive|negative|neutral"}\n\n'
-        "Return [] if there are no such discoveries. Output ONLY the JSON array — no "
+        "Return [] if there are no such discoveries. Output ONLY the JSON array. No "
         "prose, no explanation, no code fences.\n\n"
         f"=== TRANSCRIPT ===\n{window.transcript or '(no speech transcribed)'}\n\n"
         f"=== CHAT ===\n{chat}\n"
@@ -298,7 +298,7 @@ def build_stats_summary(window: Window, *, elapsed_label: str = "") -> str:
         f"**{window.chat_count}** chat message(s)."
     ]
     if elapsed_label:
-        parts[0] = elapsed_label + " — " + parts[0]
+        parts[0] = elapsed_label + ": " + parts[0]
     if window.transcript:
         parts.append("> " + truncate(window.transcript, 500))
     if window.links:
@@ -414,7 +414,7 @@ class Summarizer:
 
         # The complete deduped finds list ships as its own follow-up message
         # (embed description holds 4096 chars vs a field's 1024). Posted after
-        # the FINAL digest only — the refined digest ~30 min later would just
+        # the FINAL digest only; the refined digest ~30 min later would just
         # duplicate it. Best-effort: a finds post failure never fails the digest.
         if not refined and finds:
             recap = FindsRecap(
@@ -431,7 +431,7 @@ class Summarizer:
         embed-ready dicts (name/detail/deeplink) for the update field.
 
         Uses the cheap UPDATE backend (runs every window). Fully best-effort: any
-        LLM, parse, or DB error is logged and swallowed — finds enhance updates and
+        LLM, parse, or DB error is logged and swallowed. Finds enhance updates and
         must never break them. Returns [] when there is nothing (or no real LLM).
         """
         if self.llm.name == "none":
@@ -484,7 +484,7 @@ class Summarizer:
         the joined condensations become the digest's "transcript". A failed
         segment falls back to a hard-truncated slice so the digest never loses a
         whole span of the stream silently. With no real LLM (backend "none"),
-        head-truncation is the only option — same as before.
+        head-truncation is the only option, same as before.
         """
         if len(transcript) <= DIGEST_TRANSCRIPT_CAP or self.digest_llm.name == "none":
             return transcript
@@ -509,7 +509,7 @@ class Summarizer:
             if result.ok and result.text.strip():
                 return f"[part {i + 1}/{len(segments)}]\n{result.text.strip()}"
             log.warning("segment %d/%d condense failed (%s); using truncated raw", i + 1, len(segments), result.error)
-            return f"[part {i + 1}/{len(segments)} — raw excerpt]\n{truncate(seg, 2000)}"
+            return f"[part {i + 1}/{len(segments)}: raw excerpt]\n{truncate(seg, 2000)}"
 
         condensed = await asyncio.gather(*(condense(i, s) for i, s in enumerate(segments)))
         return "\n\n".join(condensed)

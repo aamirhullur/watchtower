@@ -2,7 +2,7 @@
 #
 # Userspace WireGuard tunnel to Cloudflare WARP, exposing loopback-only
 # SOCKS5 (:25344) and HTTP CONNECT (:25345) proxies. yt-dlp/ffmpeg use the
-# HTTP listener for all YouTube traffic (datacenter-IP bot-wall bypass —
+# HTTP listener for all YouTube traffic (datacenter-IP bot-wall bypass;
 # see deploy/install.md). No root, no tun device: everything in userspace.
 
 [Unit]

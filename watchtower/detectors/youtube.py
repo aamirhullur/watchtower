@@ -73,7 +73,7 @@ def parse_live_page(html: str) -> LiveInfo | None:
         return None
 
     if _ISUPCOMING_RE.search(html) and not _ISLIVE_RE.search(html):
-        # Scheduled premiere / upcoming stream — not live yet.
+        # Scheduled premiere / upcoming stream, not live yet.
         return None
 
     is_live = bool(_ISLIVE_RE.search(html))
@@ -164,7 +164,7 @@ class YouTubeDetector:
         """Poll loop. Calls on_live(LiveEvent) on a fresh go-live and
         on_offline(channel) once a previously-live stream has been confirmed gone
         for ``offline_confirmations`` consecutive polls. Fetch errors are treated
-        as 'unknown' — they never advance the offline streak."""
+        as 'unknown'; they never advance the offline streak."""
         while not stop.is_set():
             result = await self.poll_once()
             if result is FETCH_ERROR:

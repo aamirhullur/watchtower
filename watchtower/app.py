@@ -44,7 +44,7 @@ class App:
         await db.connect()
 
         # Dedicated empty working dir for the LLM CLI subprocess (prompt-injection
-        # containment — see LlmConfig.workdir / claude_cli.build_argv).
+        # containment; see LlmConfig.workdir / claude_cli.build_argv).
         try:
             cfg.llm_workdir().mkdir(parents=True, exist_ok=True)
         except OSError as e:
@@ -223,7 +223,7 @@ class App:
         except Exception as e:
             log.exception("session %s crashed: %s", key, e)
         finally:
-            # Only evict ourselves — a rotated-in newer session may already own the
+            # Only evict ourselves. A rotated-in newer session may already own the
             # key (see _on_live video-id rotation).
             if self._sessions.get(key) is sess:
                 self._sessions.pop(key, None)

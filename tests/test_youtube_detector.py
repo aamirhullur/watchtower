@@ -1,6 +1,6 @@
 """Detector run-loop logic: fetch-error vs not-live vs consecutive-miss offline.
 
-These exercise H2 — a transient fetch failure (429/timeout/non-200) must never be
+These exercise H2: a transient fetch failure (429/timeout/non-200) must never be
 conflated with the stream going offline, and offline is only declared after N
 *consecutive* fetched-and-not-live polls.
 """

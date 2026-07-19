@@ -3,7 +3,7 @@
 #
 # Copy to /etc/watchtower/config.yaml and edit. Non-secret settings only.
 # SECRETS (webhook URLs, API keys, Twitch tokens) come ONLY from the environment
-# via the systemd EnvironmentFile (/etc/watchtower/env) — never put them here.
+# via the systemd EnvironmentFile (/etc/watchtower/env). Never put them here.
 # The env var *names* are configurable below; their *values* live in the env.
 # =============================================================================
 
@@ -36,7 +36,7 @@ retention_days: 0   # 0 = keep transcripts/chat/links forever (a 4 h stream ≈ 
 youtube_chat_binary: ""
 
 # ----------------------------------------------------------------------------
-# Discord (plain webhooks; no bot token needed — suits an outbound-only box).
+# Discord (plain webhooks; no bot token needed, which suits an outbound-only box).
 # ----------------------------------------------------------------------------
 discord:
   # Env var holding the default webhook URL. Used for any purpose without an
@@ -84,7 +84,7 @@ llm:
   # or twice per stream and read much better from sonnet/opus.
   digest_model: sonnet
   # Reasoning effort for the digest model (sonnet/opus accept low..max; haiku
-  # does not — leave `effort` empty when model is haiku).
+  # does not, so leave `effort` empty when model is haiku).
   digest_effort: high
   effort: ""
   # Binary path; empty => `claude` / `codex` on PATH.

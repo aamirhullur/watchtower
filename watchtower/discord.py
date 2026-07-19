@@ -2,10 +2,10 @@
 
 Pure renderers (unit-tested) that map the neutral notification model (see
 ``notify.py``) onto Discord embed dicts, plus an async poster that handles 429
-retry-after. Every Discord-specific constraint — the 1024/4096/6000-char caps,
-whole-line truncation, field layout, colours, footers — lives here and only here;
-the domain never sees an embed. Webhooks are plain HTTPS POSTs — no bot token
-needed, which suits an outbound-only box behind Tailscale.
+retry-after. Every Discord-specific constraint lives here and only here: the
+1024/4096/6000-char caps, whole-line truncation, field layout, colours, footers.
+The domain never sees an embed. Webhooks are plain HTTPS POSTs (no bot token
+needed), which suits an outbound-only box behind Tailscale.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ _FIELD_VALUE_CAP = 1024
 
 
 def _find_line(f: Find) -> str | None:
-    """Render one find as ``**name** — detail [↗](deeplink)``.
+    """Render one find as ``**name**: detail [↗](deeplink)``.
 
     Detail and the ``↗`` link markup are only appended when present; a find with a
     blank name renders to nothing (returns ``None``).
@@ -45,7 +45,7 @@ def _find_line(f: Find) -> str | None:
     line = f"**{name}**"
     detail = (f.detail or "").strip()
     if detail:
-        line += f" — {detail}"
+        line += f": {detail}"
     deeplink = (f.deeplink or "").strip()
     if deeplink:
         line += f" [↗]({deeplink})"
@@ -86,7 +86,7 @@ def render_go_live(note: GoLive) -> dict:
 
 def render_rolling_update(note: RollingUpdate, *, max_desc: int) -> dict:
     embed: dict = {
-        "title": f"📝 Update — {truncate(note.title or note.channel, 240)}",
+        "title": f"📝 Update: {truncate(note.title or note.channel, 240)}",
         "url": note.url or None,
         "description": truncate(note.summary, min(max_desc, _EMBED_DESC_CAP)),
         "color": COLOR_UPDATE,
@@ -102,7 +102,7 @@ def render_digest(note: Digest, *, max_desc: int) -> dict:
     label = "Refined digest" if note.refined else "Final digest"
     emoji = "✨" if note.refined else "📄"
     embed: dict = {
-        "title": f"{emoji} {label} — {truncate(note.title or note.channel, 220)}",
+        "title": f"{emoji} {label}: {truncate(note.title or note.channel, 220)}",
         "url": note.url or None,
         "description": truncate(note.summary, min(max_desc, _EMBED_DESC_CAP)),
         "color": COLOR_REFINED if note.refined else COLOR_DIGEST,
@@ -110,7 +110,7 @@ def render_digest(note: Digest, *, max_desc: int) -> dict:
     }
     # Finds are NOT inlined here: a full stream's list blows the 1024-char field
     # cap (and the 6000-char message budget next to a 4096-char description), so
-    # they ship as a standalone follow-up message — see render_finds_recap.
+    # they ship as a standalone follow-up message; see render_finds_recap.
     fields = [f for f in (_links_field(note.links, limit=25),) if f]
     if fields:
         embed["fields"] = fields
@@ -141,7 +141,7 @@ def render_finds_recap(note: FindsRecap) -> dict | None:
         body_lines.append(line)
         used += cost
     return {
-        "title": f"🔎 Finds — {truncate(note.title or note.channel, 230)}",
+        "title": f"🔎 Finds: {truncate(note.title or note.channel, 230)}",
         "url": note.url or None,
         "description": truncate("\n".join(body_lines), _EMBED_DESC_CAP),
         "color": COLOR_DIGEST,
@@ -162,7 +162,7 @@ def render(note: Notification, *, max_desc: int) -> tuple[str, dict | None]:
     """Map a neutral notification to its ``(webhook kind, embed)`` for delivery.
 
     ``embed`` is ``None`` when the payload renders to nothing (e.g. a finds recap
-    whose entries all have blank names) — the caller then posts nothing.
+    whose entries all have blank names). The caller then posts nothing.
     """
     if isinstance(note, GoLive):
         return "announce", render_go_live(note)
@@ -214,7 +214,7 @@ class DiscordPoster:
     async def post(self, note: Notification, *, max_retries: int = 4) -> bool:
         """Deliver a neutral notification: render it here at the boundary, then POST.
 
-        Returns True when nothing needed rendering (e.g. an empty finds recap) —
+        Returns True when nothing needed rendering (e.g. an empty finds recap);
         that is not a delivery failure.
         """
         kind, embed = render(note, max_desc=self.cfg.discord.max_description_chars)

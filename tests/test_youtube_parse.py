@@ -34,7 +34,7 @@ def test_parse_live_page_requires_both_islive_and_videoid():
 
 
 def test_parse_live_page_reconstructs_url_ignoring_canonical_host():
-    # M6: never trust the scraped canonical href — reconstruct the watch URL from
+    # M6: never trust the scraped canonical href; reconstruct the watch URL from
     # the validated video id even if the canonical points at an attacker host.
     html = (
         '"isLive":true '
