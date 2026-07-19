@@ -27,7 +27,7 @@ import logging
 from ..config import LlmConfig
 from .base import LLMBackend, LLMResult
 
-log = logging.getLogger("streamwatch.llm.codex")
+log = logging.getLogger("watchtower.llm.codex")
 
 
 def build_argv(binary: str, model: str, workdir: str = "") -> list[str]:

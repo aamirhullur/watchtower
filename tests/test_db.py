@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from streamwatch.db import Cursor, Database
-from streamwatch.summarize import assemble_window
+from watchtower.db import Cursor, Database
+from watchtower.summarize import assemble_window
 
 
 @pytest.mark.asyncio

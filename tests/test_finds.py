@@ -5,24 +5,24 @@ from __future__ import annotations
 
 import pytest
 
-from streamwatch.config import Config
-from streamwatch.db import Cursor, Database
-from streamwatch.discord import (
+from watchtower.config import Config
+from watchtower.db import Cursor, Database
+from watchtower.discord import (
     _finds_field,
     render_digest,
     render_finds_recap,
     render_rolling_update,
 )
-from streamwatch.llm.base import LLMBackend, LLMResult
-from streamwatch.notify import Digest, Find, FindsRecap, RollingUpdate
-from streamwatch.summarize import (
+from watchtower.llm.base import LLMBackend, LLMResult
+from watchtower.notify import Digest, Find, FindsRecap, RollingUpdate
+from watchtower.summarize import (
     Summarizer,
     assemble_window,
     build_finds_prompt,
     dedupe_finds,
     parse_finds,
 )
-from streamwatch.util import deep_link
+from watchtower.util import deep_link
 
 
 class FakeLLM(LLMBackend):
@@ -442,7 +442,7 @@ class StubPoster:
 
 
 async def _digest_fixture(tmp_path, name):
-    from streamwatch.config import WatchTarget
+    from watchtower.config import WatchTarget
 
     db = Database(str(tmp_path / name))
     await db.connect()

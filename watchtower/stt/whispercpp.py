@@ -18,7 +18,7 @@ from ..config import SttConfig
 from ..util import minimal_env, terminate_process
 from .base import STTBackend, STTError
 
-log = logging.getLogger("streamwatch.stt.whispercpp")
+log = logging.getLogger("watchtower.stt.whispercpp")
 
 # Matches a leading "[00:00:00.000 --> 00:00:05.000]" timestamp block.
 _TS_RE = re.compile(r"^\s*\[[0-9:.\s]+-->[0-9:.\s]+\]\s*")

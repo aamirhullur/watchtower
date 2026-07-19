@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from streamwatch.chat.base import ChatMessage
-from streamwatch.config import Config
-from streamwatch.pipeline import StreamSession
+from watchtower.chat.base import ChatMessage
+from watchtower.config import Config
+from watchtower.pipeline import StreamSession
 
 
 def _make_session(maxq: int) -> StreamSession:

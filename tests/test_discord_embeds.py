@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from streamwatch.discord import (
+from watchtower.discord import (
     COLOR_ANNOUNCE,
     COLOR_DIGEST,
     COLOR_REFINED,
@@ -10,7 +10,7 @@ from streamwatch.discord import (
     render_rolling_update,
     render_test,
 )
-from streamwatch.notify import Digest, Find, FindsRecap, GoLive, RollingUpdate, WebhookTest
+from watchtower.notify import Digest, Find, FindsRecap, GoLive, RollingUpdate, WebhookTest
 
 
 def test_announce_embed():

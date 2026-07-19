@@ -6,20 +6,20 @@
 # see deploy/install.md). No root, no tun device: everything in userspace.
 
 [Unit]
-Description=wireproxy WARP egress for streamwatch (userspace WireGuard proxy)
+Description=wireproxy WARP egress for watchtower (userspace WireGuard proxy)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=streamwatch
-Group=streamwatch
-ExecStart=/opt/wireproxy/wireproxy -c /etc/streamwatch/wireproxy.conf
+User=watchtower
+Group=watchtower
+ExecStart=/opt/wireproxy/wireproxy -c /etc/watchtower/wireproxy.conf
 
 Restart=on-failure
 RestartSec=5
 
-# --- Hardening (mirrors streamwatch.service where applicable) ---
+# --- Hardening (mirrors watchtower.service where applicable) ---
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

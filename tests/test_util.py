@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from streamwatch.util import extract_urls, truncate
+from watchtower.util import extract_urls, truncate
 
 
 def test_extract_urls_dedup_and_order():

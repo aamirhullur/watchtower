@@ -4,12 +4,12 @@ import asyncio
 
 import pytest
 
-from streamwatch.config import LlmConfig
-from streamwatch.llm import build_llm
-from streamwatch.llm.claude_cli import ClaudeCliBackend
-from streamwatch.llm.claude_cli import build_argv as claude_argv
-from streamwatch.llm.codex_cli import CodexCliBackend
-from streamwatch.llm.codex_cli import build_argv as codex_argv
+from watchtower.config import LlmConfig
+from watchtower.llm import build_llm
+from watchtower.llm.claude_cli import ClaudeCliBackend
+from watchtower.llm.claude_cli import build_argv as claude_argv
+from watchtower.llm.codex_cli import CodexCliBackend
+from watchtower.llm.codex_cli import build_argv as codex_argv
 
 
 # --- pure argv construction (verified flags) --------------------------------
@@ -53,9 +53,9 @@ def test_codex_argv_no_model_omits_flag():
 
 def test_codex_argv_cd_confines_to_workdir():
     # H1: Codex must be confined to the dedicated empty LLM dir.
-    argv = codex_argv("codex", "gpt-5", "/var/lib/streamwatch/llm")
+    argv = codex_argv("codex", "gpt-5", "/var/lib/watchtower/llm")
     assert "--cd" in argv
-    assert argv[argv.index("--cd") + 1] == "/var/lib/streamwatch/llm"
+    assert argv[argv.index("--cd") + 1] == "/var/lib/watchtower/llm"
     argv_no = codex_argv("codex", "gpt-5")
     assert "--cd" not in argv_no
 
@@ -158,7 +158,7 @@ async def test_llm_missing_binary_returns_not_ok(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_none_backend_signals_fallback():
-    from streamwatch.llm.none import NoneBackend
+    from watchtower.llm.none import NoneBackend
 
     res = await NoneBackend(LlmConfig(backend="none")).summarize("P")
     assert res.ok is False

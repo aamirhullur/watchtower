@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from streamwatch.detectors.youtube import FETCH_ERROR, LiveInfo, YouTubeDetector
+from watchtower.detectors.youtube import FETCH_ERROR, LiveInfo, YouTubeDetector
 
 
 def _live(vid: str) -> LiveInfo:

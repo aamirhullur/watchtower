@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from streamwatch.db import Cursor
-from streamwatch.summarize import (
+from watchtower.db import Cursor
+from watchtower.summarize import (
     Window,
     assemble_window,
     build_digest_prompt,

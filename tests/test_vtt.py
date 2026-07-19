@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from conftest import read_fixture
 
-from streamwatch.util import parse_vtt
+from watchtower.util import parse_vtt
 
 
 def test_parse_vtt_dedups_rolling_captions():

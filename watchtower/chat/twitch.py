@@ -21,7 +21,7 @@ import logging
 from ..util import now_utc, utc_iso
 from .base import ChatAdapter, ChatMessage
 
-log = logging.getLogger("streamwatch.chat.twitch")
+log = logging.getLogger("watchtower.chat.twitch")
 
 
 class TwitchChatAdapter(ChatAdapter):

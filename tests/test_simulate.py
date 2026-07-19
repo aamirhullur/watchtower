@@ -11,18 +11,18 @@ from pathlib import Path
 import pytest
 from conftest import FIXTURES
 
-import streamwatch.main as main
-from streamwatch.capture import Chunk
-from streamwatch.config import Config
-from streamwatch.db import Database
-from streamwatch.main import (
+import watchtower.main as main
+from watchtower.capture import Chunk
+from watchtower.config import Config
+from watchtower.db import Database
+from watchtower.main import (
     StoredTranscript,
     _simulate,
     load_transcripts_jsonl,
     write_transcript_line,
 )
-from streamwatch.summarize import Summarizer
-from streamwatch.util import parse_vtt
+from watchtower.summarize import Summarizer
+from watchtower.util import parse_vtt
 
 
 # --------------------------------------------------------------------------- #

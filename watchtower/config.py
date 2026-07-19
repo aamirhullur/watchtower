@@ -42,7 +42,7 @@ class DiscordConfig:
     announce_webhook: str = ""
     update_webhook: str = ""
     digest_webhook: str = ""
-    username: str = "streamwatch"
+    username: str = "watchtower"
     # Discord embed description hard cap is 4096; we stay well under it.
     max_description_chars: int = 3800
 
@@ -93,7 +93,7 @@ class LlmConfig:
 
 @dataclass
 class CaptureConfig:
-    workdir: str = "/var/lib/streamwatch/work"
+    workdir: str = "/var/lib/watchtower/work"
     segment_seconds: int = 60
     sample_rate: int = 16000
     keep_chunks: bool = False  # keep WAV chunks after transcription (debug)
@@ -132,7 +132,7 @@ class NtfyConfig:
 
 @dataclass
 class HealthConfig:
-    heartbeat_file: str = "/var/lib/streamwatch/heartbeat"
+    heartbeat_file: str = "/var/lib/watchtower/heartbeat"
     heartbeat_interval_seconds: int = 30
     ntfy: NtfyConfig = field(default_factory=NtfyConfig)
 
@@ -153,7 +153,7 @@ class WatchTarget:
 
 @dataclass
 class Config:
-    state_db: str = "/var/lib/streamwatch/streamwatch.db"
+    state_db: str = "/var/lib/watchtower/watchtower.db"
     poll_interval_minutes: int = 10  # YouTube live-page polling
     update_interval_minutes: int = 15  # rolling summary cadence
     # Consecutive not-live poll results required before a YouTube stream is

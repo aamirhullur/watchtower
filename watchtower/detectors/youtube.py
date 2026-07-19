@@ -21,7 +21,7 @@ import aiohttp
 
 from . import LiveEvent
 
-log = logging.getLogger("streamwatch.detectors.youtube")
+log = logging.getLogger("watchtower.detectors.youtube")
 
 BROWSER_UA = (
     "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) "

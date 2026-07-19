@@ -20,7 +20,7 @@ from .llm.base import LLMBackend
 from .notify import Digest, Find, FindsRecap, RollingUpdate
 from .util import deep_link, extract_urls, truncate
 
-log = logging.getLogger("streamwatch.summarize")
+log = logging.getLogger("watchtower.summarize")
 
 # Upper bound on chat rows loaded for a digest (prompt uses the first 400).
 DIGEST_CHAT_LIMIT = 500

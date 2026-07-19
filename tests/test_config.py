@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from streamwatch.config import ConfigError, check_secrets, load_config
+from watchtower.config import ConfigError, check_secrets, load_config
 
 
 def write(tmp_path: Path, body: str) -> Path:

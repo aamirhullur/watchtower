@@ -18,7 +18,7 @@ import logging
 from ..util import minimal_env, now_utc, utc_iso
 from .base import ChatAdapter, ChatMessage
 
-log = logging.getLogger("streamwatch.chat.youtube")
+log = logging.getLogger("watchtower.chat.youtube")
 
 
 class YouTubeExternalChatAdapter(ChatAdapter):

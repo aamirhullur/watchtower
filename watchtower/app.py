@@ -26,7 +26,7 @@ from .pipeline import StreamSession
 from .stt import build_stt
 from .summarize import Summarizer
 
-log = logging.getLogger("streamwatch.app")
+log = logging.getLogger("watchtower.app")
 
 
 class App:
@@ -117,7 +117,7 @@ class App:
                 )
 
             log.info(
-                "streamwatch running: %d youtube, %d twitch targets; stt=%s llm=%s",
+                "watchtower running: %d youtube, %d twitch targets; stt=%s llm=%s",
                 sum(1 for t in cfg.watch if t.platform == "youtube" and t.enabled),
                 len(twitch_targets),
                 cfg.stt.backend,
@@ -140,7 +140,7 @@ class App:
         finally:
             await session.close()
             await db.close()
-            log.info("streamwatch stopped")
+            log.info("watchtower stopped")
 
     # ------------------------------------------------------------------ #
     async def _retention_loop(self, db: Database) -> None:

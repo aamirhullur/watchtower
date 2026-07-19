@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "streamwatch"
+name = "watchtower"
 version = "0.1.0"
-description = "Self-hosted daemon that watches livestreams (YouTube + Twitch), transcribes locally, and posts rolling summaries + digests to Discord."
+description = "Self-hosted daemon that turns livestreams into structured knowledge — local Whisper transcription, LLM rolling summaries, and a permanent database of finds."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -23,10 +23,10 @@ twitch = ["twitchio>=3.0"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 [project.scripts]
-streamwatch = "streamwatch.main:cli"
+watchtower = "watchtower.main:cli"
 
 [tool.setuptools.packages.find]
-include = ["streamwatch*"]
+include = ["watchtower*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 
-from streamwatch.config import LlmConfig
-from streamwatch.llm import build_digest_llm
-from streamwatch.llm.base import LLMBackend, LLMResult
-from streamwatch.summarize import DIGEST_TRANSCRIPT_CAP, Summarizer
+from watchtower.config import LlmConfig
+from watchtower.llm import build_digest_llm
+from watchtower.llm.base import LLMBackend, LLMResult
+from watchtower.summarize import DIGEST_TRANSCRIPT_CAP, Summarizer
 
 
 def test_build_digest_llm_none_when_same():
@@ -34,7 +34,7 @@ class NamedLLM(LLMBackend):
 
 
 def test_condense_uses_digest_backend():
-    from streamwatch.config import Config
+    from watchtower.config import Config
 
     update_llm = NamedLLM("update")
     digest_llm = NamedLLM("digest")
@@ -47,7 +47,7 @@ def test_condense_uses_digest_backend():
 
 
 def test_summary_text_routes_to_given_backend():
-    from streamwatch.config import Config
+    from watchtower.config import Config
 
     update_llm = NamedLLM("update")
     digest_llm = NamedLLM("digest")

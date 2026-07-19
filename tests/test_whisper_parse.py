@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from conftest import read_fixture
 
-from streamwatch.stt.whispercpp import parse_whisper_output
+from watchtower.stt.whispercpp import parse_whisper_output
 
 
 def test_parse_strips_timestamps_and_blank_markers():

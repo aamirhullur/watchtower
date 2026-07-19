@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from conftest import read_fixture
 
-from streamwatch.detectors.youtube import parse_live_page
+from watchtower.detectors.youtube import parse_live_page
 
 
 def test_parse_live_page_detects_live():

@@ -16,7 +16,7 @@ import aiohttp
 from ..config import SttConfig
 from .base import STTBackend, STTError
 
-log = logging.getLogger("streamwatch.stt.groq")
+log = logging.getLogger("watchtower.stt.groq")
 
 GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 

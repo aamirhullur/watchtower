@@ -1,14 +1,14 @@
 # =============================================================================
-# streamwatch configuration (example)
+# watchtower configuration (example)
 #
-# Copy to /etc/streamwatch/config.yaml and edit. Non-secret settings only.
+# Copy to /etc/watchtower/config.yaml and edit. Non-secret settings only.
 # SECRETS (webhook URLs, API keys, Twitch tokens) come ONLY from the environment
-# via the systemd EnvironmentFile (/etc/streamwatch/env) — never put them here.
+# via the systemd EnvironmentFile (/etc/watchtower/env) — never put them here.
 # The env var *names* are configurable below; their *values* live in the env.
 # =============================================================================
 
 # SQLite state database. Must be under a ReadWritePaths dir in the systemd unit.
-state_db: /var/lib/streamwatch/streamwatch.db
+state_db: /var/lib/watchtower/watchtower.db
 
 # How often to poll YouTube channel /live pages (minutes). Global default; can be
 # overridden per-target below.
@@ -49,7 +49,7 @@ discord:
   announce_webhook: ""
   update_webhook: ""
   digest_webhook: ""
-  username: streamwatch
+  username: watchtower
   max_description_chars: 3800
 
 # ----------------------------------------------------------------------------
@@ -101,7 +101,7 @@ llm:
 # Capture (yt-dlp/streamlink -> ffmpeg rolling WAV segments).
 # ----------------------------------------------------------------------------
 capture:
-  workdir: /var/lib/streamwatch/work
+  workdir: /var/lib/watchtower/work
   segment_seconds: 60          # rolling chunk length
   sample_rate: 16000           # mono 16kHz for whisper
   keep_chunks: false           # keep WAVs after transcription (debug)
@@ -120,7 +120,7 @@ capture:
   # Fallback only, if the WARP egress ever gets flagged: Netscape cookies.txt
   # exported from a THROWAWAY Google account logged into YouTube (never your
   # real account). chmod 600, owned by the service user.
-  # e.g. /etc/streamwatch/yt-cookies.txt
+  # e.g. /etc/watchtower/yt-cookies.txt
   cookies_file: ""
   restart_backoff_seconds: 5
   max_restart_backoff_seconds: 60
@@ -137,7 +137,7 @@ refined_digest:
 # Health: heartbeat file + optional ntfy alerting.
 # ----------------------------------------------------------------------------
 health:
-  heartbeat_file: /var/lib/streamwatch/heartbeat
+  heartbeat_file: /var/lib/watchtower/heartbeat
   heartbeat_interval_seconds: 30
   ntfy:
     enabled: false

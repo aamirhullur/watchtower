@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from conftest import FIXTURES
 
-from streamwatch.chat.live_chat_replay import parse_live_chat_file, parse_live_chat_line
+from watchtower.chat.live_chat_replay import parse_live_chat_file, parse_live_chat_line
 
 
 def test_parse_live_chat_file_fixture():

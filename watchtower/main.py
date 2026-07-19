@@ -1,4 +1,4 @@
-"""streamwatch CLI.
+"""watchtower CLI.
 
 Subcommands:
   run           Run the daemon (detect, capture, transcribe, summarize, post).
@@ -33,7 +33,7 @@ from .stt import build_stt
 from .summarize import Summarizer
 from .util import extract_urls, minimal_env, now_utc, parse_vtt, setup_logging, terminate_process, utc_iso
 
-log = logging.getLogger("streamwatch.main")
+log = logging.getLogger("watchtower.main")
 
 # Human-readable labels for the dry-run poster, keyed by post kind.
 _DRY_RUN_LABELS = {
@@ -216,7 +216,7 @@ async def _simulate(cfg: Config, args) -> int:
     if chat_file:
         log.info("loaded %d chat message(s) from %s", len(chat_events), chat_file)
 
-    with tempfile.TemporaryDirectory(prefix="streamwatch-sim-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="watchtower-sim-") as tmp:
         tmpdir = Path(tmp)
 
         # Two ways to get transcript chunks: replay a stored JSONL (cheap, no STT)
@@ -371,7 +371,7 @@ def cmd_simulate(args) -> int:
 # Parser
 # --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="streamwatch", description=__doc__.splitlines()[0])
+    p = argparse.ArgumentParser(prog="watchtower", description=__doc__.splitlines()[0])
     p.add_argument("--log-level", default="INFO", help="DEBUG/INFO/WARNING/ERROR (default INFO)")
     sub = p.add_subparsers(dest="command", required=True)
 

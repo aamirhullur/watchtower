@@ -1,4 +1,4 @@
-# streamwatch
+# watchtower
 
 A self-hosted information-gathering daemon. Point it at sources you care about
 and it turns them into structured, searchable knowledge: a permanent SQLite
@@ -55,7 +55,7 @@ behind Tailscale, outbound-only, as a hardened non-root systemd service.
 - **Health**: heartbeat file for an external watchdog + optional ntfy alerts on
   capture/transcribe/LLM crash-loops.
 - **YouTube from a datacenter IP**: YouTube bot-walls media requests from VPS
-  ranges. streamwatch tunnels yt-dlp traffic through **Cloudflare WARP** via
+  ranges. watchtower tunnels yt-dlp traffic through **Cloudflare WARP** via
   [wireproxy](https://github.com/whyvl/wireproxy) (free, userspace, no root, no
   cookies, no Google account) — set `capture.proxy: http://127.0.0.1:25345`.
   See `deploy/install.md`. Validated on metadata, VOD captions, VOD media and
@@ -65,7 +65,7 @@ behind Tailscale, outbound-only, as a hardened non-root systemd service.
 
 ```
                                   ┌──────────────────────────────────────────┐
-                                  │              streamwatch (1 asyncio proc) │
+                                  │              watchtower (1 asyncio proc) │
                                   │                                            │
    YouTube /live poll ─┐          │  ┌────────────┐   go-live   ┌───────────┐ │
                        ├─ detect ─┼─▶│  Detectors │────────────▶│  Stream   │ │
@@ -103,20 +103,20 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e '.[twitch,dev]'          # drop [twitch] for YouTube-only
 
 # Validate a config and see which env secrets are missing:
-streamwatch check-config --config config/config.example.yaml
+watchtower check-config --config config/config.example.yaml
 
 # Post a hello embed (needs $DISCORD_WEBHOOK_URL):
 export DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-streamwatch test-webhook --config config/config.example.yaml
+watchtower test-webhook --config config/config.example.yaml
 
 # End-to-end acceptance test — run the FULL pipeline on a local file or VOD URL,
 # printing updates instead of posting:
-streamwatch simulate --config config/config.example.yaml --dry-run some_talk.mp4
-streamwatch simulate --config config/config.example.yaml --dry-run \
+watchtower simulate --config config/config.example.yaml --dry-run some_talk.mp4
+watchtower simulate --config config/config.example.yaml --dry-run \
   'https://www.youtube.com/watch?v=VIDEO_ID'
 
 # Run the daemon:
-streamwatch run --config config/config.example.yaml
+watchtower run --config config/config.example.yaml
 ```
 
 `simulate` chunks the input faster-than-realtime and treats every couple of
@@ -159,7 +159,7 @@ deliberate long-term asset.
 ## Deployment
 
 See [`deploy/install.md`](deploy/install.md) and the hardened
-[`deploy/streamwatch.service`](deploy/streamwatch.service) +
+[`deploy/watchtower.service`](deploy/watchtower.service) +
 [`deploy/wireproxy.service`](deploy/wireproxy.service) units.
 
 ## Tests

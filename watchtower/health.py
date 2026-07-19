@@ -20,7 +20,7 @@ import aiohttp
 from .config import HealthConfig
 from .util import now_utc, utc_iso
 
-log = logging.getLogger("streamwatch.health")
+log = logging.getLogger("watchtower.health")
 
 
 class HealthMonitor:
@@ -63,7 +63,7 @@ class HealthMonitor:
         log.warning("component %s failure #%d: %s", component, count, detail)
         if self.cfg.ntfy.enabled and count >= self.cfg.ntfy.failure_threshold:
             await self._alert(
-                f"streamwatch: {component} failed {count}x",
+                f"watchtower: {component} failed {count}x",
                 detail or "repeated failures; check logs",
             )
             self._failures[component] = 0  # reset after alerting

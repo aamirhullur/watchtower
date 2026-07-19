@@ -29,7 +29,7 @@ from pathlib import Path
 from .config import CaptureConfig
 from .util import minimal_env, now_utc, terminate_process, utc_iso
 
-log = logging.getLogger("streamwatch.capture")
+log = logging.getLogger("watchtower.capture")
 
 
 @dataclass

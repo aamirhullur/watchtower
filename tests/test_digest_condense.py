@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 
-from streamwatch.llm.base import LLMBackend, LLMResult
-from streamwatch.summarize import (
+from watchtower.llm.base import LLMBackend, LLMResult
+from watchtower.summarize import (
     DIGEST_SEGMENT_CHARS,
     DIGEST_TRANSCRIPT_CAP,
     Summarizer,
@@ -31,7 +31,7 @@ class RecordingLLM(LLMBackend):
 
 
 def make_summarizer(llm: LLMBackend) -> Summarizer:
-    from streamwatch.config import Config
+    from watchtower.config import Config
 
     return Summarizer(Config(), db=None, llm=llm, poster=None)  # type: ignore[arg-type]
 

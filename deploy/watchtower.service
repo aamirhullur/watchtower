@@ -1,28 +1,28 @@
-# /etc/systemd/system/streamwatch.service
+# /etc/systemd/system/watchtower.service
 #
-# Hardened unit for the streamwatch daemon. Runs as a dedicated non-root user on
+# Hardened unit for the watchtower daemon. Runs as a dedicated non-root user on
 # Ubuntu 24.04 ARM64. See deploy/install.md for setup.
 
 [Unit]
-Description=streamwatch livestream watcher + Discord digest bot
-Documentation=https://github.com/local/streamwatch
+Description=watchtower livestream watcher + Discord digest bot
+Documentation=https://github.com/local/watchtower
 After=network-online.target wireproxy.service
 Wants=network-online.target wireproxy.service
 
 [Service]
 Type=simple
-User=streamwatch
-Group=streamwatch
+User=watchtower
+Group=watchtower
 
 # Run from the private state dir (also the LLM CLI's isolated cwd lives under here).
-WorkingDirectory=/var/lib/streamwatch
+WorkingDirectory=/var/lib/watchtower
 
 # The venv's console script. Config path is a non-secret argument.
-ExecStart=/opt/streamwatch/venv/bin/streamwatch --log-level INFO run --config /etc/streamwatch/config.yaml
+ExecStart=/opt/watchtower/venv/bin/watchtower --log-level INFO run --config /etc/watchtower/config.yaml
 
 # Secrets (DISCORD_WEBHOOK_URL, TWITCH_*, GROQ_API_KEY, NTFY_TOKEN,
 # CLAUDE_CODE_OAUTH_TOKEN, ...) live here, root-owned 0640. Never in the YAML.
-EnvironmentFile=/etc/streamwatch/env
+EnvironmentFile=/etc/watchtower/env
 
 # --- Restart policy ---
 Restart=on-failure
@@ -41,13 +41,13 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 # Carve out a private state dir (created + owned automatically under /var/lib).
-StateDirectory=streamwatch
+StateDirectory=watchtower
 StateDirectoryMode=0750
-# Explicit writable paths (StateDirectory already grants /var/lib/streamwatch).
-ReadWritePaths=/var/lib/streamwatch
+# Explicit writable paths (StateDirectory already grants /var/lib/watchtower).
+ReadWritePaths=/var/lib/watchtower
 # Give the service its own home so tools (yt-dlp, claude, codex) have a cache dir
 # without exposing the real user home (ProtectHome=yes hides /home).
-Environment=HOME=/var/lib/streamwatch
+Environment=HOME=/var/lib/watchtower
 # whisper-cli's RUNPATH points at its (hidden) build dir; its shared libs are
 # co-located in /opt/whisper/bin instead.
 Environment=LD_LIBRARY_PATH=/opt/whisper/bin

@@ -9,7 +9,7 @@ import re
 import sys
 from datetime import datetime, timezone
 
-log = logging.getLogger("streamwatch")
+log = logging.getLogger("watchtower")
 
 
 async def terminate_process(proc, grace: float = 5.0) -> None:

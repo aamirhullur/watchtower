@@ -20,7 +20,7 @@ from .config import Config
 from .notify import Digest, Find, FindsRecap, GoLive, Notification, RollingUpdate, WebhookTest
 from .util import truncate
 
-log = logging.getLogger("streamwatch.discord")
+log = logging.getLogger("watchtower.discord")
 
 # Discord brand-ish colours per message kind.
 COLOR_ANNOUNCE = 0x9146FF  # twitch purple
@@ -80,7 +80,7 @@ def render_go_live(note: GoLive) -> dict:
         "url": note.url or None,
         "description": f"**{note.channel}** is now live on {note.platform}.",
         "color": COLOR_ANNOUNCE,
-        "footer": {"text": "streamwatch • go-live"},
+        "footer": {"text": "watchtower • go-live"},
     }
 
 
@@ -90,7 +90,7 @@ def render_rolling_update(note: RollingUpdate, *, max_desc: int) -> dict:
         "url": note.url or None,
         "description": truncate(note.summary, min(max_desc, _EMBED_DESC_CAP)),
         "color": COLOR_UPDATE,
-        "footer": {"text": f"streamwatch • rolling update • {note.channel}"},
+        "footer": {"text": f"watchtower • rolling update • {note.channel}"},
     }
     fields = [f for f in (_finds_field(note.finds), _links_field(note.links)) if f]
     if fields:
@@ -106,7 +106,7 @@ def render_digest(note: Digest, *, max_desc: int) -> dict:
         "url": note.url or None,
         "description": truncate(note.summary, min(max_desc, _EMBED_DESC_CAP)),
         "color": COLOR_REFINED if note.refined else COLOR_DIGEST,
-        "footer": {"text": f"streamwatch • {label.lower()} • {note.channel}"},
+        "footer": {"text": f"watchtower • {label.lower()} • {note.channel}"},
     }
     # Finds are NOT inlined here: a full stream's list blows the 1024-char field
     # cap (and the 6000-char message budget next to a 4096-char description), so
@@ -145,16 +145,16 @@ def render_finds_recap(note: FindsRecap) -> dict | None:
         "url": note.url or None,
         "description": truncate("\n".join(body_lines), _EMBED_DESC_CAP),
         "color": COLOR_DIGEST,
-        "footer": {"text": f"streamwatch • finds • {note.channel}"},
+        "footer": {"text": f"watchtower • finds • {note.channel}"},
     }
 
 
 def render_test() -> dict:
     return {
-        "title": "👋 streamwatch webhook test",
+        "title": "👋 watchtower webhook test",
         "description": "If you can read this, the webhook works.",
         "color": COLOR_TEST,
-        "footer": {"text": "streamwatch • test-webhook"},
+        "footer": {"text": "watchtower • test-webhook"},
     }
 
 

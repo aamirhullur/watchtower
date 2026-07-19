@@ -15,7 +15,7 @@ Verified against TwitchIO 3.x docs (twitchio.dev, stable) and Twitch EventSub do
 * Event listeners registered via ``@client.listen()`` for
   ``event_stream_online`` / ``event_stream_offline``.
 
-TwitchIO is an optional dependency (``pip install streamwatch[twitch]``). Imports
+TwitchIO is an optional dependency (``pip install watchtower[twitch]``). Imports
 are lazy so a YouTube-only deployment doesn't need it. See install.md for the
 one-time user-token bootstrap.
 
@@ -38,7 +38,7 @@ from ..config import Config, WatchTarget
 from ..util import now_utc, utc_iso
 from . import LiveEvent
 
-log = logging.getLogger("streamwatch.detectors.twitch")
+log = logging.getLogger("watchtower.detectors.twitch")
 
 
 class TwitchDetector:
@@ -70,7 +70,7 @@ class TwitchDetector:
         except ImportError:
             log.error(
                 "twitchio not installed; Twitch targets disabled. "
-                "Install with: pip install streamwatch[twitch]"
+                "Install with: pip install watchtower[twitch]"
             )
             await stop.wait()
             return

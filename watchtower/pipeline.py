@@ -24,7 +24,7 @@ from .stt.base import STTBackend, STTError
 from .summarize import Summarizer
 from .util import extract_urls, minimal_env, now_utc, parse_vtt, terminate_process, utc_iso
 
-log = logging.getLogger("streamwatch.pipeline")
+log = logging.getLogger("watchtower.pipeline")
 
 
 class StreamSession:
@@ -272,7 +272,7 @@ class StreamSession:
 
     async def _fetch_vod_captions(self, video_id: str, url: str) -> str:
         """Run yt-dlp to download auto-subs (works on unlisted VODs) and parse VTT."""
-        with tempfile.TemporaryDirectory(prefix="streamwatch-subs-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="watchtower-subs-") as tmp:
             out_tmpl = str(Path(tmp) / "%(id)s")
             argv = [
                 self.cfg.capture.yt_dlp,
