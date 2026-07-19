@@ -24,17 +24,33 @@ behind Tailscale, outbound-only, as a hardened non-root systemd service.
   `links` table.
 - **Summarizes** every ~15 min while live and posts a rolling Discord update; on
   stream end it posts a final digest (topics, timeline, all product/tool links).
-  Summaries come from a pluggable **LLM backend**:
+  Long transcripts are map-reduce condensed first so a 4 h stream's digest sees
+  the whole stream, not the first 40 min. Summaries come from a pluggable
+  **LLM backend**:
   - `claude_cli` — headless Claude Code CLI, locked down for untrusted input
-    (`claude -p --model haiku --output-format text --disallowedTools "*" --max-turns 1 --setting-sources none`, run in an isolated empty cwd)
+    (`claude -p --model haiku --output-format text --disallowedTools "*" --max-turns 1 --setting-sources ""`, run in an isolated empty cwd)
   - `codex_cli` — headless OpenAI Codex CLI (`codex exec --model … -`)
   - `none` — stats + links only.
-  If the LLM times out or fails, the update still goes out as a stats-only post.
+  A cheap model handles rolling updates while `llm.digest_model` (+
+  `digest_effort`) can route digests to a stronger one. If the LLM times out or
+  fails, the update still goes out as a stats-only post.
+- **🔎 Finds** — the discovery layer. Each window gets a second cheap-LLM pass
+  extracting concrete discoverables (products, tools, games, benchmarks,
+  recommendations) as structured JSON: stored forever in a `finds` table,
+  surfaced on every rolling update (top 5, with YouTube `&t=` deep links), and
+  recapped as a standalone deduped message after the final digest — the point
+  is learning about things like a "GMKtec K8 Plus" without watching the stream.
 - **Refined digest** (YouTube): ~30 min after a stream ends it pulls the VOD
   auto-captions (`yt-dlp --write-auto-subs`), which are far cleaner than live STT,
   regenerates the digest, and reposts it marked *refined*.
 - **Health**: heartbeat file for an external watchdog + optional ntfy alerts on
   capture/transcribe/LLM crash-loops.
+- **YouTube from a datacenter IP**: YouTube bot-walls media requests from VPS
+  ranges. streamwatch tunnels yt-dlp traffic through **Cloudflare WARP** via
+  [wireproxy](https://github.com/whyvl/wireproxy) (free, userspace, no root, no
+  cookies, no Google account) — set `capture.proxy: http://127.0.0.1:25345`.
+  See `deploy/install.md`. Validated on metadata, VOD captions, VOD media and
+  live HLS capture. Twitch needs no proxy.
 
 X/Twitter/Nitter watching is intentionally out of scope for v1; the poller
 architecture stays module-friendly so it can be added later.
@@ -71,7 +87,7 @@ architecture stays module-friendly so it can be added later.
                                   │   └─────────┘        └────────┬─────────┘
                                   └───────────────────────────────┼───────────┘
                                                                   ▼
-                                             go-live · rolling update · final · refined
+                                go-live · rolling update (+finds) · final · finds recap · refined
 ```
 
 ## Quickstart (local dev)
@@ -114,7 +130,9 @@ Everything non-secret lives in the YAML (`--config`); see the fully-commented
 | `stt.whisper_cli` / `whisper_model` | Paths to the whisper.cpp binary + GGML model |
 | `llm.backend` | `claude_cli` \| `codex_cli` \| `none` |
 | `llm.model` | Claude alias (`haiku`/`sonnet`/`opus`) or Codex model id |
+| `llm.digest_model` / `digest_effort` | Optional stronger model + effort for digests only |
 | `capture.segment_seconds` | Chunk length (default 60) |
+| `capture.proxy` | HTTP proxy for YouTube (wireproxy/WARP; see install.md) |
 | `refined_digest.*` | YouTube VOD-caption re-digest timing |
 | `health.ntfy.*` | Optional push alerts on crash-loops |
 | `watch:` | List of channels (`platform`, `handle`, per-channel overrides) |
@@ -128,12 +146,15 @@ env vars.
 ## State
 
 SQLite (`state_db`) with tables: `streams`, `transcript_chunks`, `chat_messages`,
-`links`, `updates_posted`.
+`links`, `finds`, `updates_posted`. With `retention_days: 0` everything is kept
+forever (a 4 h stream ≈ 1.6 MB) — the transcript + chat + finds corpus is a
+deliberate long-term asset.
 
 ## Deployment
 
 See [`deploy/install.md`](deploy/install.md) and the hardened
-[`deploy/streamwatch.service`](deploy/streamwatch.service) unit.
+[`deploy/streamwatch.service`](deploy/streamwatch.service) +
+[`deploy/wireproxy.service`](deploy/wireproxy.service) units.
 
 ## Tests
 
@@ -141,6 +162,7 @@ See [`deploy/install.md`](deploy/install.md) and the hardened
 python -m pytest
 ```
 
-No network required: config parsing, window assembly/dedup, YouTube live-page
-parsing (HTML fixtures), whisper output parsing, VTT caption parsing, LLM backend
-argv construction, and Discord embed building.
+No network required (118 tests): config parsing, window assembly/dedup, YouTube
+live-page parsing (HTML fixtures), whisper output parsing, VTT caption parsing,
+LLM backend argv construction, digest map-reduce condensation, finds
+parsing/dedup/deep-links, and Discord embed building.
