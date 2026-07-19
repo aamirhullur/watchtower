@@ -64,9 +64,9 @@ behind Tailscale, outbound-only, as a hardened non-root systemd service.
 ## Architecture
 
 ```
-                                  ┌──────────────────────────────────────────┐
-                                  │              watchtower (1 asyncio proc) │
-                                  │                                            │
+                                  ┌───────────────────────────────────────────┐
+                                  │              watchtower (1 asyncio proc)  │
+                                  │                                           │
    YouTube /live poll ─┐          │  ┌────────────┐   go-live   ┌───────────┐ │
                        ├─ detect ─┼─▶│  Detectors │────────────▶│  Stream   │ │
    Twitch EventSub ────┘          │  └────────────┘             │  Session  │ │
