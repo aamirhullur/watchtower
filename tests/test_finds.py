@@ -9,11 +9,12 @@ from streamwatch.config import Config
 from streamwatch.db import Cursor, Database
 from streamwatch.discord import (
     _finds_field,
-    build_digest_embed,
-    build_finds_embed,
-    build_update_embed,
+    render_digest,
+    render_finds_recap,
+    render_rolling_update,
 )
 from streamwatch.llm.base import LLMBackend, LLMResult
+from streamwatch.notify import Digest, Find, FindsRecap, RollingUpdate
 from streamwatch.summarize import (
     Summarizer,
     assemble_window,
@@ -245,10 +246,10 @@ async def test_db_finds_pruned_with_stream(tmp_path):
 # embed field construction + 1024 cap
 # --------------------------------------------------------------------------- #
 def test_finds_field_renders_name_detail_link():
-    finds = [
-        {"name": "K8 Plus", "detail": "a mini pc", "deeplink": "https://y?t=30s"},
-        {"name": "NoLink", "detail": "no deeplink here", "deeplink": ""},
-    ]
+    finds = (
+        Find(name="K8 Plus", detail="a mini pc", deeplink="https://y?t=30s"),
+        Find(name="NoLink", detail="no deeplink here", deeplink=""),
+    )
     field = _finds_field(finds)
     assert field["name"] == "🔎 Finds"
     assert "**K8 Plus** — a mini pc [↗](https://y?t=30s)" in field["value"]
@@ -258,32 +259,33 @@ def test_finds_field_renders_name_detail_link():
 
 
 def test_finds_field_limit_five():
-    finds = [{"name": f"n{i}", "detail": "d", "deeplink": ""} for i in range(8)]
+    finds = tuple(Find(name=f"n{i}", detail="d") for i in range(8))
     field = _finds_field(finds, limit=5)
     assert field["value"].count("\n") == 4  # 5 lines
 
 
 def test_finds_field_respects_1024_cap():
-    finds = [
-        {"name": "x" * 400, "detail": "y" * 400, "deeplink": "https://z?t=0s"}
-        for _ in range(25)
-    ]
+    finds = tuple(
+        Find(name="x" * 400, detail="y" * 400, deeplink="https://z?t=0s") for _ in range(25)
+    )
     field = _finds_field(finds, limit=25)
     assert len(field["value"]) <= 1024
 
 
 def test_finds_field_none_when_empty():
-    assert _finds_field([]) is None
+    assert _finds_field(()) is None
     assert _finds_field(None) is None
     # Entries with blank names collapse to no field.
-    assert _finds_field([{"name": "  ", "detail": "d"}]) is None
+    assert _finds_field((Find(name="  ", detail="d"),)) is None
 
 
 def test_update_embed_includes_finds_field():
-    e = build_update_embed(
-        channel="C", title="T", url="https://u", summary="s", links=["https://a.com"],
-        max_chars=3800,
-        finds=[{"name": "Balatro", "detail": "a game", "deeplink": "https://u&t=0s"}],
+    e = render_rolling_update(
+        RollingUpdate(
+            channel="C", title="T", url="https://u", summary="s", links=("https://a.com",),
+            finds=(Find(name="Balatro", detail="a game", deeplink="https://u&t=0s"),),
+        ),
+        max_desc=3800,
     )
     field_names = [f["name"] for f in e["fields"]]
     assert "🔎 Finds" in field_names
@@ -291,30 +293,30 @@ def test_update_embed_includes_finds_field():
 
 
 def test_update_embed_no_finds_no_field():
-    e = build_update_embed(
-        channel="C", title="T", url="", summary="s", links=[], max_chars=3800, finds=[]
+    e = render_rolling_update(
+        RollingUpdate(channel="C", title="T", url="", summary="s", finds=()), max_desc=3800
     )
     assert "fields" not in e
 
 
 def test_digest_embed_has_no_finds_field():
-    # Finds moved to a standalone follow-up message (build_finds_embed): a full
+    # Finds moved to a standalone follow-up message (render_finds_recap): a full
     # stream's list can't fit a 1024-char embed field.
-    e = build_digest_embed(
-        channel="C", title="T", url="https://u", summary="s", links=[], max_chars=3800
+    e = render_digest(
+        Digest(channel="C", title="T", url="https://u", summary="s"), max_desc=3800
     )
     assert "fields" not in e
 
 
 # --------------------------------------------------------------------------- #
-# build_finds_embed (standalone end-of-stream recap message)
+# render_finds_recap (standalone end-of-stream recap message)
 # --------------------------------------------------------------------------- #
 def test_finds_embed_renders_all_25_in_description():
-    finds = [
-        {"name": f"tool{i}", "detail": f"detail {i}", "deeplink": f"https://y?t={i}s"}
+    finds = tuple(
+        Find(name=f"tool{i}", detail=f"detail {i}", deeplink=f"https://y?t={i}s")
         for i in range(25)
-    ]
-    e = build_finds_embed(channel="C", title="Stream T", url="https://u", finds=finds)
+    )
+    e = render_finds_recap(FindsRecap(channel="C", title="Stream T", url="https://u", finds=finds))
     assert e["title"].startswith("🔎 Finds — Stream T")
     for i in range(25):
         assert f"**tool{i}** — detail {i} [↗](https://y?t={i}s)" in e["description"]
@@ -322,13 +324,13 @@ def test_finds_embed_renders_all_25_in_description():
 
 
 def test_finds_embed_none_when_empty():
-    assert build_finds_embed(channel="C", title="T", url="", finds=[]) is None
-    assert build_finds_embed(channel="C", title="T", url="", finds=[{"name": " "}]) is None
+    assert render_finds_recap(FindsRecap(channel="C", title="T", url="", finds=())) is None
+    assert render_finds_recap(FindsRecap(channel="C", title="T", url="", finds=(Find(name=" "),))) is None
 
 
 def test_finds_embed_overflow_drops_whole_lines_with_marker():
-    finds = [{"name": f"n{i}" + "x" * 300, "detail": "y" * 200, "deeplink": ""} for i in range(25)]
-    e = build_finds_embed(channel="C", title="T", url="", finds=finds)
+    finds = tuple(Find(name=f"n{i}" + "x" * 300, detail="y" * 200) for i in range(25))
+    e = render_finds_recap(FindsRecap(channel="C", title="T", url="", finds=finds))
     assert len(e["description"]) <= 4096
     # Truncation is visible and lands on a line boundary, never mid-line.
     last = e["description"].splitlines()[-1]
@@ -338,8 +340,8 @@ def test_finds_embed_overflow_drops_whole_lines_with_marker():
 
 
 def test_finds_embed_no_link_markup_when_deeplink_empty():
-    e = build_finds_embed(
-        channel="C", title="T", url="", finds=[{"name": "K8 Plus", "detail": "mini pc", "deeplink": ""}]
+    e = render_finds_recap(
+        FindsRecap(channel="C", title="T", url="", finds=(Find(name="K8 Plus", detail="mini pc"),))
     )
     assert "**K8 Plus** — mini pc" in e["description"]
     assert "[↗]" not in e["description"]
@@ -432,10 +434,10 @@ def test_build_finds_prompt_has_json_instructions():
 # --------------------------------------------------------------------------- #
 class StubPoster:
     def __init__(self):
-        self.posts = []  # (kind, embed)
+        self.posts = []  # neutral notification payloads
 
-    async def post_embed(self, kind, embed, **kw):
-        self.posts.append((kind, embed))
+    async def post(self, note, **kw):
+        self.posts.append(note)
         return True
 
 
@@ -458,9 +460,13 @@ async def test_post_digest_posts_followup_finds_message(tmp_path):
         poster = StubPoster()
         s = Summarizer(Config(), db=db, llm=FakeLLM(text="digest text"), poster=poster)  # type: ignore[arg-type]
         assert await s.post_digest(sid, target)
-        kinds = [k for k, _ in poster.posts]
-        assert kinds == ["digest", "digest"]
-        finds_embed = poster.posts[1][1]
+        # A Digest followed by a standalone FindsRecap (final digest only).
+        assert [type(n).__name__ for n in poster.posts] == ["Digest", "FindsRecap"]
+        recap = poster.posts[1]
+        assert isinstance(recap, FindsRecap)
+        assert recap.finds[0].name == "K8 Plus"
+        # Render at the delivery boundary to confirm the embed content is intact.
+        finds_embed = render_finds_recap(recap)
         assert finds_embed["title"].startswith("🔎 Finds")
         assert "**K8 Plus** — mini pc" in finds_embed["description"]
         # Deep link from offset 60 -> t=30s.
@@ -476,6 +482,8 @@ async def test_post_digest_refined_skips_finds_message(tmp_path):
         poster = StubPoster()
         s = Summarizer(Config(), db=db, llm=FakeLLM(text="refined text"), poster=poster)  # type: ignore[arg-type]
         assert await s.post_digest(sid, target, refined=True)
-        assert [k for k, _ in poster.posts] == ["refined"]
+        # Only the refined digest — no standalone finds recap follows it.
+        assert [type(n).__name__ for n in poster.posts] == ["Digest"]
+        assert poster.posts[0].refined is True
     finally:
         await db.close()

@@ -15,8 +15,9 @@ from dataclasses import dataclass, field
 
 from .config import Config, WatchTarget
 from .db import Cursor, Database
-from .discord import DiscordPoster, build_digest_embed, build_finds_embed, build_update_embed
+from .discord import DiscordPoster
 from .llm.base import LLMBackend
+from .notify import Digest, Find, FindsRecap, RollingUpdate
 from .util import deep_link, extract_urls, truncate
 
 log = logging.getLogger("streamwatch.summarize")
@@ -352,16 +353,15 @@ class Summarizer:
         # let a finds failure block the update).
         finds = await self._extract_finds(stream_id, stream, window)
 
-        embed = build_update_embed(
+        note = RollingUpdate(
             channel=target.display(),
             title=stream["title"] or "",
             url=stream["url"] or "",
             summary=summary,
-            links=window.links,
-            max_chars=self.cfg.discord.max_description_chars,
-            finds=finds,
+            links=tuple(window.links),
+            finds=tuple(Find(**f) for f in finds),
         )
-        ok = await self.poster.post_embed("update", embed)
+        ok = await self.poster.post(note)
         # Advance cursor regardless of Discord success so we don't re-summarize.
         await self.db.record_update(stream_id, "update", window.cursor)
         return ok
@@ -401,16 +401,15 @@ class Summarizer:
             llm=self.digest_llm,
         )
 
-        embed = build_digest_embed(
+        note = Digest(
             channel=target.display(),
             title=stream["title"] or "",
             url=stream["url"] or "",
             summary=summary,
-            links=links,
-            max_chars=self.cfg.discord.max_description_chars,
+            links=tuple(links),
             refined=refined,
         )
-        ok = await self.poster.post_embed("refined" if refined else "digest", embed)
+        ok = await self.poster.post(note)
         await self.db.record_update(stream_id, "refined" if refined else "digest")
 
         # The complete deduped finds list ships as its own follow-up message
@@ -418,14 +417,13 @@ class Summarizer:
         # the FINAL digest only — the refined digest ~30 min later would just
         # duplicate it. Best-effort: a finds post failure never fails the digest.
         if not refined and finds:
-            finds_embed = build_finds_embed(
+            recap = FindsRecap(
                 channel=target.display(),
                 title=stream["title"] or "",
                 url=stream["url"] or "",
-                finds=finds,
+                finds=tuple(Find(**f) for f in finds),
             )
-            if finds_embed is not None:
-                await self.poster.post_embed("digest", finds_embed)
+            await self.poster.post(recap)
         return ok
 
     async def _extract_finds(self, stream_id: int, stream, window: Window) -> list[dict]:

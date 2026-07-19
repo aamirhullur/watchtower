@@ -17,8 +17,9 @@ from .capture import CaptureSession, Chunk, build_ffmpeg_file_argv
 from .config import Config, WatchTarget
 from .db import Database
 from .detectors import LiveEvent
-from .discord import DiscordPoster, build_announce_embed
+from .discord import DiscordPoster
 from .health import HealthMonitor
+from .notify import GoLive
 from .stt.base import STTBackend, STTError
 from .summarize import Summarizer
 from .util import extract_urls, minimal_env, now_utc, parse_vtt, terminate_process, utc_iso
@@ -123,13 +124,13 @@ class StreamSession:
 
     # ------------------------------------------------------------------ #
     async def _announce(self) -> None:
-        embed = build_announce_embed(
+        note = GoLive(
             channel=self.target.display(),
             platform=self.event.platform,
             title=self.event.title,
             url=self.event.url,
         )
-        await self.poster.post_embed("announce", embed)
+        await self.poster.post(note)
 
     async def _transcribe_loop(self, capture: CaptureSession) -> None:
         assert self.stream_id is not None

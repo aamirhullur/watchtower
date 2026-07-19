@@ -25,8 +25,9 @@ import aiohttp
 
 from .app import run_app
 from .config import Config, ConfigError, check_secrets, load_config
-from .discord import DiscordPoster, build_test_embed
+from .discord import DiscordPoster, render
 from .llm import build_digest_llm, build_llm
+from .notify import Notification, WebhookTest
 from .pipeline import chunk_local_file
 from .stt import build_stt
 from .summarize import Summarizer
@@ -53,7 +54,12 @@ class DryRunPoster:
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    async def post_embed(self, kind: str, embed: dict, **_) -> bool:
+    async def post(self, note: Notification, **_) -> bool:
+        # Render at the same delivery boundary the real poster uses, then print
+        # instead of POSTing.
+        kind, embed = render(note, max_desc=self.cfg.discord.max_description_chars)
+        if embed is None:
+            return True
         label = _DRY_RUN_LABELS.get(kind, kind.upper())
         print(f"\n===== [{label}] =====")
         print(f"{embed.get('title', '')}")
@@ -135,7 +141,7 @@ def cmd_check_config(args) -> int:
 
 async def _test_webhook(cfg: Config) -> int:
     async with DiscordPoster(cfg) as poster:
-        ok = await poster.post_embed("test", build_test_embed())
+        ok = await poster.post(WebhookTest())
     print("Webhook post: " + ("OK" if ok else "FAILED"))
     return 0 if ok else 1
 

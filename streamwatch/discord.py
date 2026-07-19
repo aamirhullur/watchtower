@@ -1,8 +1,11 @@
-"""Discord webhook poster.
+"""Discord delivery adapter.
 
-Pure embed-builder functions (unit-tested) + an async poster that handles 429
-retry-after. Webhooks are plain HTTPS POSTs — no bot token needed, which suits an
-outbound-only box behind Tailscale.
+Pure renderers (unit-tested) that map the neutral notification model (see
+``notify.py``) onto Discord embed dicts, plus an async poster that handles 429
+retry-after. Every Discord-specific constraint — the 1024/4096/6000-char caps,
+whole-line truncation, field layout, colours, footers — lives here and only here;
+the domain never sees an embed. Webhooks are plain HTTPS POSTs — no bot token
+needed, which suits an outbound-only box behind Tailscale.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import os
 import aiohttp
 
 from .config import Config
+from .notify import Digest, Find, FindsRecap, GoLive, Notification, RollingUpdate, WebhookTest
 from .util import truncate
 
 log = logging.getLogger("streamwatch.discord")
@@ -29,7 +33,26 @@ _EMBED_DESC_CAP = 4096
 _FIELD_VALUE_CAP = 1024
 
 
-def _links_field(links: list[str], limit: int = 15) -> dict | None:
+def _find_line(f: Find) -> str | None:
+    """Render one find as ``**name** — detail [↗](deeplink)``.
+
+    Detail and the ``↗`` link markup are only appended when present; a find with a
+    blank name renders to nothing (returns ``None``).
+    """
+    name = (f.name or "").strip()
+    if not name:
+        return None
+    line = f"**{name}**"
+    detail = (f.detail or "").strip()
+    if detail:
+        line += f" — {detail}"
+    deeplink = (f.deeplink or "").strip()
+    if deeplink:
+        line += f" [↗]({deeplink})"
+    return line
+
+
+def _links_field(links: tuple[str, ...], limit: int = 15) -> dict | None:
     if not links:
         return None
     shown = links[:limit]
@@ -41,96 +64,60 @@ def _links_field(links: list[str], limit: int = 15) -> dict | None:
     return {"name": "Links", "value": truncate(body, _FIELD_VALUE_CAP), "inline": False}
 
 
-def _finds_field(finds: list[dict] | None, limit: int = 5) -> dict | None:
-    """Build the "🔎 Finds" embed field from a list of discovery dicts.
-
-    Each dict carries ``name`` (required), ``detail`` and ``deeplink`` (both
-    optional). Rendered as ``**name** — detail [↗](deeplink)``; the link markup is
-    only appended when a non-empty deeplink is present. Kept under the 1024-char
-    field cap via ``truncate``.
-    """
+def _finds_field(finds: tuple[Find, ...] | None, limit: int = 5) -> dict | None:
+    """Build the "🔎 Finds" embed field from finds, kept under the 1024-char cap."""
     if not finds:
         return None
-    lines: list[str] = []
-    for f in finds[:limit]:
-        name = (f.get("name") or "").strip()
-        if not name:
-            continue
-        line = f"**{name}**"
-        detail = (f.get("detail") or "").strip()
-        if detail:
-            line += f" — {detail}"
-        deeplink = (f.get("deeplink") or "").strip()
-        if deeplink:
-            line += f" [↗]({deeplink})"
-        lines.append(line)
+    lines = [line for f in finds[:limit] if (line := _find_line(f))]
     if not lines:
         return None
     return {"name": "🔎 Finds", "value": truncate("\n".join(lines), _FIELD_VALUE_CAP), "inline": False}
 
 
-def build_announce_embed(*, channel: str, platform: str, title: str, url: str) -> dict:
+def render_go_live(note: GoLive) -> dict:
     return {
-        "title": f"🔴 LIVE: {truncate(title or channel, 240)}",
-        "url": url or None,
-        "description": f"**{channel}** is now live on {platform}.",
+        "title": f"🔴 LIVE: {truncate(note.title or note.channel, 240)}",
+        "url": note.url or None,
+        "description": f"**{note.channel}** is now live on {note.platform}.",
         "color": COLOR_ANNOUNCE,
         "footer": {"text": "streamwatch • go-live"},
     }
 
 
-def build_update_embed(
-    *,
-    channel: str,
-    title: str,
-    url: str,
-    summary: str,
-    links: list[str],
-    max_chars: int,
-    finds: list[dict] | None = None,
-) -> dict:
+def render_rolling_update(note: RollingUpdate, *, max_desc: int) -> dict:
     embed: dict = {
-        "title": f"📝 Update — {truncate(title or channel, 240)}",
-        "url": url or None,
-        "description": truncate(summary, min(max_chars, _EMBED_DESC_CAP)),
+        "title": f"📝 Update — {truncate(note.title or note.channel, 240)}",
+        "url": note.url or None,
+        "description": truncate(note.summary, min(max_desc, _EMBED_DESC_CAP)),
         "color": COLOR_UPDATE,
-        "footer": {"text": f"streamwatch • rolling update • {channel}"},
+        "footer": {"text": f"streamwatch • rolling update • {note.channel}"},
     }
-    fields = [f for f in (_finds_field(finds), _links_field(links)) if f]
+    fields = [f for f in (_finds_field(note.finds), _links_field(note.links)) if f]
     if fields:
         embed["fields"] = fields
     return embed
 
 
-def build_digest_embed(
-    *,
-    channel: str,
-    title: str,
-    url: str,
-    summary: str,
-    links: list[str],
-    max_chars: int,
-    refined: bool = False,
-) -> dict:
-    label = "Refined digest" if refined else "Final digest"
-    emoji = "✨" if refined else "📄"
+def render_digest(note: Digest, *, max_desc: int) -> dict:
+    label = "Refined digest" if note.refined else "Final digest"
+    emoji = "✨" if note.refined else "📄"
     embed: dict = {
-        "title": f"{emoji} {label} — {truncate(title or channel, 220)}",
-        "url": url or None,
-        "description": truncate(summary, min(max_chars, _EMBED_DESC_CAP)),
-        "color": COLOR_REFINED if refined else COLOR_DIGEST,
-        "footer": {"text": f"streamwatch • {label.lower()} • {channel}"},
+        "title": f"{emoji} {label} — {truncate(note.title or note.channel, 220)}",
+        "url": note.url or None,
+        "description": truncate(note.summary, min(max_desc, _EMBED_DESC_CAP)),
+        "color": COLOR_REFINED if note.refined else COLOR_DIGEST,
+        "footer": {"text": f"streamwatch • {label.lower()} • {note.channel}"},
     }
     # Finds are NOT inlined here: a full stream's list blows the 1024-char field
     # cap (and the 6000-char message budget next to a 4096-char description), so
-    # they ship as a standalone follow-up message — see build_finds_embed.
-    fields = [f for f in (_links_field(links, limit=25),) if f]
+    # they ship as a standalone follow-up message — see render_finds_recap.
+    fields = [f for f in (_links_field(note.links, limit=25),) if f]
     if fields:
         embed["fields"] = fields
     return embed
 
 
-def build_finds_embed(*, channel: str, title: str, url: str, finds: list[dict]) -> dict | None:
+def render_finds_recap(note: FindsRecap) -> dict | None:
     """Standalone end-of-stream "🔎 Finds" recap message.
 
     The full deduped list goes in the DESCRIPTION (4096-char cap) rather than an
@@ -138,21 +125,9 @@ def build_finds_embed(*, channel: str, title: str, url: str, finds: list[dict]) 
     whole (never mid-line) if the list somehow exceeds the cap, with a
     ``… (+N more)`` tail so truncation is visible instead of silent.
     """
-    if not finds:
+    if not note.finds:
         return None
-    lines: list[str] = []
-    for f in finds:
-        name = (f.get("name") or "").strip()
-        if not name:
-            continue
-        line = f"**{name}**"
-        detail = (f.get("detail") or "").strip()
-        if detail:
-            line += f" — {detail}"
-        deeplink = (f.get("deeplink") or "").strip()
-        if deeplink:
-            line += f" [↗]({deeplink})"
-        lines.append(line)
+    lines = [line for f in note.finds if (line := _find_line(f))]
     if not lines:
         return None
     tail_reserve = 24  # room for the "… (+NN more)" marker
@@ -166,21 +141,40 @@ def build_finds_embed(*, channel: str, title: str, url: str, finds: list[dict]) 
         body_lines.append(line)
         used += cost
     return {
-        "title": f"🔎 Finds — {truncate(title or channel, 230)}",
-        "url": url or None,
+        "title": f"🔎 Finds — {truncate(note.title or note.channel, 230)}",
+        "url": note.url or None,
         "description": truncate("\n".join(body_lines), _EMBED_DESC_CAP),
         "color": COLOR_DIGEST,
-        "footer": {"text": f"streamwatch • finds • {channel}"},
+        "footer": {"text": f"streamwatch • finds • {note.channel}"},
     }
 
 
-def build_test_embed() -> dict:
+def render_test() -> dict:
     return {
         "title": "👋 streamwatch webhook test",
         "description": "If you can read this, the webhook works.",
         "color": COLOR_TEST,
         "footer": {"text": "streamwatch • test-webhook"},
     }
+
+
+def render(note: Notification, *, max_desc: int) -> tuple[str, dict | None]:
+    """Map a neutral notification to its ``(webhook kind, embed)`` for delivery.
+
+    ``embed`` is ``None`` when the payload renders to nothing (e.g. a finds recap
+    whose entries all have blank names) — the caller then posts nothing.
+    """
+    if isinstance(note, GoLive):
+        return "announce", render_go_live(note)
+    if isinstance(note, RollingUpdate):
+        return "update", render_rolling_update(note, max_desc=max_desc)
+    if isinstance(note, Digest):
+        return ("refined" if note.refined else "digest"), render_digest(note, max_desc=max_desc)
+    if isinstance(note, FindsRecap):
+        return "digest", render_finds_recap(note)
+    if isinstance(note, WebhookTest):
+        return "test", render_test()
+    raise TypeError(f"unknown notification type: {type(note).__name__}")
 
 
 class DiscordPoster:
@@ -217,6 +211,17 @@ class DiscordPoster:
         return override or self._default_webhook()
 
     # ---- posting ------------------------------------------------------- #
+    async def post(self, note: Notification, *, max_retries: int = 4) -> bool:
+        """Deliver a neutral notification: render it here at the boundary, then POST.
+
+        Returns True when nothing needed rendering (e.g. an empty finds recap) —
+        that is not a delivery failure.
+        """
+        kind, embed = render(note, max_desc=self.cfg.discord.max_description_chars)
+        if embed is None:
+            return True
+        return await self.post_embed(kind, embed, max_retries=max_retries)
+
     async def post_embed(self, kind: str, embed: dict, *, max_retries: int = 4) -> bool:
         url = self.webhook_for(kind)
         if not url:
