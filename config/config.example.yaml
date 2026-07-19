@@ -168,8 +168,8 @@ watch:
     poll_interval_minutes: 5
 
   - platform: youtube
-    handle: "SomeCreator"          # leading @ optional
-    name: "Some Creator"
+    handle: "AnotherCreator"       # leading @ optional
+    name: "Another Creator"
 
   - platform: twitch
     handle: "somestreamer"
@@ -177,5 +177,5 @@ watch:
     update_interval_minutes: 10
 
   - platform: twitch
-    handle: "somestreamer"
+    handle: "anotherstreamer"
     enabled: false                 # temporarily disabled

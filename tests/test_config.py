@@ -22,9 +22,9 @@ def test_example_config_loads():
     platforms = {t.platform for t in cfg.watch}
     assert platforms == {"youtube", "twitch"}
     # per-target override resolution
-    ltt = next(t for t in cfg.watch if t.name == "Some Channel")
-    assert cfg.poll_interval_for(ltt) == 5
-    assert cfg.update_interval_for(ltt) == cfg.update_interval_minutes
+    target = next(t for t in cfg.watch if t.name == "Some Channel")
+    assert cfg.poll_interval_for(target) == 5
+    assert cfg.update_interval_for(target) == cfg.update_interval_minutes
 
 
 def test_defaults_when_minimal(tmp_path):

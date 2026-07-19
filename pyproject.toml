@@ -9,7 +9,7 @@ description = "Self-hosted daemon that watches livestreams (YouTube + Twitch), t
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-authors = [{ name = "streamwatch" }]
+authors = [{ name = "Aamir Hullur" }]
 dependencies = [
     "aiohttp>=3.9",
     "pyyaml>=6.0",

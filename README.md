@@ -1,8 +1,14 @@
 # streamwatch
 
-A self-hosted asyncio daemon that watches livestream channels (YouTube + Twitch),
-detects go-live, captures audio + chat, transcribes locally, and posts rolling
-updates plus a final digest to Discord via webhooks.
+A self-hosted information-gathering daemon. Point it at sources you care about
+and it turns them into structured, searchable knowledge — rolling summaries,
+digests, and a permanent database of 🔎 finds (products, tools, ideas worth
+knowing about) delivered to Discord via webhooks.
+
+The first source module is **livestreams** (YouTube + Twitch): it detects
+go-live, captures audio + chat, transcribes locally, and summarizes while the
+stream is still running. The source architecture is pluggable so other kinds
+of feeds can be added later.
 
 Built to run unattended on a small ARM64 VM (Ubuntu 24.04, 2 cores / 12 GB)
 behind Tailscale, outbound-only, as a hardened non-root systemd service.
@@ -51,9 +57,6 @@ behind Tailscale, outbound-only, as a hardened non-root systemd service.
   cookies, no Google account) — set `capture.proxy: http://127.0.0.1:25345`.
   See `deploy/install.md`. Validated on metadata, VOD captions, VOD media and
   live HLS capture. Twitch needs no proxy.
-
-X/Twitter/Nitter watching is intentionally out of scope for v1; the poller
-architecture stays module-friendly so it can be added later.
 
 ## Architecture
 
