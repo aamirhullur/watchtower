@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 
 import aiohttp
 
@@ -32,6 +33,30 @@ COLOR_TEST = 0xEB459E  # pink
 _EMBED_DESC_CAP = 4096
 _FIELD_VALUE_CAP = 1024
 
+# Markdown-link injection defence for untrusted text (LLM summary + find
+# name/detail). The Links field already wraps its URLs in <> so Discord won't
+# unfurl them; but a bare URL or a `[label](url)` span echoed inside the summary
+# or a find would still render as a clickable link, bypassing that control.
+_MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+# A bare http(s) URL, stopping before whitespace/brackets/quotes (mirrors
+# util._URL_RE) so we don't swallow a trailing ")" or "]".
+_BARE_URL_RE = re.compile(r"<?(https?://[^\s<>\"'\)\]]+)>?", re.IGNORECASE)
+
+
+def _defang_links(text: str) -> str:
+    """Neutralise markdown-link syntax in untrusted text at the render boundary.
+
+    Turns ``[label](url)`` into ``label (url)`` (dropping the ``](`` that forms a
+    clickable link) and wraps any surviving bare http(s) URL in ``<>`` so Discord
+    never unfurls it. Plain prose and our own bullets pass through unchanged; the
+    ``**bold**`` our templates add is applied to the name AFTER this runs.
+    """
+    if not text:
+        return text
+    text = _MD_LINK_RE.sub(r"\1 (\2)", text)
+    text = _BARE_URL_RE.sub(lambda m: f"<{m.group(1)}>", text)
+    return text
+
 
 def _find_line(f: Find) -> str | None:
     """Render one find as ``**name**: detail [↗](deeplink)``.
@@ -42,10 +67,11 @@ def _find_line(f: Find) -> str | None:
     name = (f.name or "").strip()
     if not name:
         return None
-    line = f"**{name}**"
+    # Defang untrusted name/detail BEFORE wrapping the name in our own ** bold.
+    line = f"**{_defang_links(name)}**"
     detail = (f.detail or "").strip()
     if detail:
-        line += f": {detail}"
+        line += f": {_defang_links(detail)}"
     deeplink = (f.deeplink or "").strip()
     if deeplink:
         line += f" [↗]({deeplink})"
@@ -88,7 +114,7 @@ def render_rolling_update(note: RollingUpdate, *, max_desc: int) -> dict:
     embed: dict = {
         "title": f"📝 Update: {truncate(note.title or note.channel, 240)}",
         "url": note.url or None,
-        "description": truncate(note.summary, min(max_desc, _EMBED_DESC_CAP)),
+        "description": truncate(_defang_links(note.summary), min(max_desc, _EMBED_DESC_CAP)),
         "color": COLOR_UPDATE,
         "footer": {"text": f"watchtower • rolling update • {note.channel}"},
     }
@@ -104,7 +130,7 @@ def render_digest(note: Digest, *, max_desc: int) -> dict:
     embed: dict = {
         "title": f"{emoji} {label}: {truncate(note.title or note.channel, 220)}",
         "url": note.url or None,
-        "description": truncate(note.summary, min(max_desc, _EMBED_DESC_CAP)),
+        "description": truncate(_defang_links(note.summary), min(max_desc, _EMBED_DESC_CAP)),
         "color": COLOR_REFINED if note.refined else COLOR_DIGEST,
         "footer": {"text": f"watchtower • {label.lower()} • {note.channel}"},
     }

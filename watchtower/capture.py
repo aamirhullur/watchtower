@@ -67,15 +67,15 @@ def build_downloader_argv(cfg: CaptureConfig, platform: str, url: str) -> list[s
     raise ValueError(f"unknown platform for capture: {platform}")
 
 
-def build_ffmpeg_segment_argv(cfg: CaptureConfig, out_pattern: str, from_stdin: bool = True) -> list[str]:
-    src = ["-i", "pipe:0"] if from_stdin else []
+def build_ffmpeg_segment_argv(cfg: CaptureConfig, out_pattern: str) -> list[str]:
     return [
         cfg.ffmpeg,
         "-hide_banner",
         "-loglevel",
         "error",
         "-nostdin",
-        *src,
+        "-i",
+        "pipe:0",
         "-vn",
         "-ac",
         "1",
@@ -196,7 +196,7 @@ class CaptureSession:
         """
         out_pattern = str(self._gen_dir() / "chunk_%05d.wav")
         dl_argv = build_downloader_argv(self.cfg, self.platform, self.url)
-        ff_argv = build_ffmpeg_segment_argv(self.cfg, out_pattern, from_stdin=True)
+        ff_argv = build_ffmpeg_segment_argv(self.cfg, out_pattern)
         # Media tools never need process secrets. Pass a scrubbed env.
         env = minimal_env()
 

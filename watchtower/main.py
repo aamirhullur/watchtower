@@ -31,7 +31,7 @@ from .notify import Notification, WebhookTest
 from .pipeline import chunk_local_file
 from .stt import build_stt
 from .summarize import Summarizer
-from .util import extract_urls, minimal_env, now_utc, parse_vtt, setup_logging, terminate_process, utc_iso
+from .util import minimal_env, now_utc, parse_vtt, setup_logging, terminate_process, utc_iso
 
 log = logging.getLogger("watchtower.main")
 
@@ -294,8 +294,7 @@ async def _simulate(cfg: Config, args) -> int:
                     ev = chat_events[chat_idx]
                     ts = utc_iso(base_time + timedelta(seconds=ev.offset_s))
                     await db.add_chat(stream_id, ev.author, ev.text, ts)
-                    for url in extract_urls(ev.text):
-                        await db.add_link(stream_id, url, "chat", ts)
+                    await db.add_links_from(stream_id, ev.text, "chat", ts)
                     chat_idx += 1
                     chat_ingested += 1
 
@@ -317,8 +316,7 @@ async def _simulate(cfg: Config, args) -> int:
                 last_seq = seq
                 if text:
                     await db.add_chunk(stream_id, seq, started_at, text)
-                    for url in extract_urls(text):
-                        await db.add_link(stream_id, url, "transcript", started_at)
+                    await db.add_links_from(stream_id, text, "transcript", started_at)
                     log.info("chunk %d/%d transcribed (%d chars)", i + 1, total, len(text))
 
                 if (i + 1) % per_window == 0:
@@ -345,8 +343,7 @@ async def _simulate(cfg: Config, args) -> int:
                 transcript = parse_vtt(Path(refined_vtt).read_text(encoding="utf-8", errors="replace"))
                 if transcript:
                     await db.replace_transcript(stream_id, transcript)
-                    for url in extract_urls(transcript):
-                        await db.add_link(stream_id, url, "transcript", utc_iso(now_utc()))
+                    await db.add_links_from(stream_id, transcript, "transcript", utc_iso(now_utc()))
                     await summarizer.post_digest(stream_id, target, refined=True)
                     log.info("refined digest posted from %s", refined_vtt)
                 else:

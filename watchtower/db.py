@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 
-from .util import now_utc, utc_iso
+from .util import extract_urls, now_utc, utc_iso
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS streams (
@@ -253,6 +253,15 @@ class Database:
             self.conn.commit()
 
         await self._run(_do)
+
+    async def add_links_from(self, stream_id: int, text: str, source: str, ts: str) -> None:
+        """Extract every URL from ``text`` and insert each as a link row.
+
+        Convenience over ``add_link`` for the common transcript/chat ingest idiom;
+        ``source`` (transcript|chat) and ``ts`` are recorded verbatim per call.
+        """
+        for url in extract_urls(text):
+            await self.add_link(stream_id, url, source, ts)
 
     async def links_for(self, stream_id: int) -> list[sqlite3.Row]:
         def _do():

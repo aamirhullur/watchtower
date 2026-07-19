@@ -22,7 +22,7 @@ from .health import HealthMonitor
 from .notify import GoLive
 from .stt.base import STTBackend, STTError
 from .summarize import Summarizer
-from .util import extract_urls, minimal_env, now_utc, parse_vtt, terminate_process, utc_iso
+from .util import minimal_env, now_utc, parse_vtt, terminate_process, utc_iso
 
 log = logging.getLogger("watchtower.pipeline")
 
@@ -165,8 +165,7 @@ class StreamSession:
 
                 if text:
                     await self.db.add_chunk(self.stream_id, chunk.seq, chunk.started_at, text)
-                    for url in extract_urls(text):
-                        await self.db.add_link(self.stream_id, url, "transcript", chunk.started_at)
+                    await self.db.add_links_from(self.stream_id, text, "transcript", chunk.started_at)
                 capture.cleanup_chunk(chunk)
             except asyncio.CancelledError:
                 raise
@@ -216,8 +215,7 @@ class StreamSession:
                 continue
             try:
                 await self.db.add_chat(self.stream_id, msg.author, msg.text, msg.ts)
-                for url in extract_urls(msg.text):
-                    await self.db.add_link(self.stream_id, url, "chat", msg.ts)
+                await self.db.add_links_from(self.stream_id, msg.text, "chat", msg.ts)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -262,8 +260,7 @@ class StreamSession:
             transcript = await self._fetch_vod_captions(self.event.video_id, self.event.url)
             if transcript:
                 await self.db.replace_transcript(self.stream_id, transcript)
-                for url in extract_urls(transcript):
-                    await self.db.add_link(self.stream_id, url, "transcript", utc_iso(now_utc()))
+                await self.db.add_links_from(self.stream_id, transcript, "transcript", utc_iso(now_utc()))
                 await self.summarizer.post_digest(self.stream_id, self.target, refined=True)
                 log.info("stream %s refined digest posted (attempt %d)", self.stream_id, attempt)
                 return

@@ -138,6 +138,12 @@ class App:
                 *detector_tasks, *self._session_tasks, *self._refined_tasks, return_exceptions=True
             )
         finally:
+            # Close the STT backend too: GroqBackend owns a lazily-created aiohttp
+            # session (whispercpp's close is a no-op). Guard with getattr so a
+            # build failure before _stt is set can't turn shutdown into a NameError.
+            stt = getattr(self, "_stt", None)
+            if stt is not None:
+                await stt.close()
             await session.close()
             await db.close()
             log.info("watchtower stopped")

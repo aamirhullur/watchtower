@@ -168,7 +168,7 @@ See [`deploy/install.md`](deploy/install.md) and the hardened
 python -m pytest
 ```
 
-No network required (118 tests): config parsing, window assembly/dedup, YouTube
+No network required. Coverage: config parsing, window assembly/dedup, YouTube
 live-page parsing (HTML fixtures), whisper output parsing, VTT caption parsing,
 LLM backend argv construction, digest map-reduce condensation, finds
 parsing/dedup/deep-links, and Discord embed building.

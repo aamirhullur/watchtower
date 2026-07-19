@@ -5,7 +5,7 @@
 
 [Unit]
 Description=watchtower livestream watcher + Discord digest bot
-Documentation=https://github.com/local/watchtower
+Documentation=https://github.com/aamirhullur/watchtower
 After=network-online.target wireproxy.service
 Wants=network-online.target wireproxy.service
 

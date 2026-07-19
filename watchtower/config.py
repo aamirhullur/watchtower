@@ -9,7 +9,7 @@ Each env-backed secret is referenced by name here and resolved at use-time so a
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -333,7 +333,3 @@ def check_secrets(cfg: Config) -> list[str]:
         warnings.append(f"health.ntfy.enabled but ${cfg.health.ntfy.token_env} not set")
 
     return warnings
-
-
-# Silence "unused" linters for is_dataclass import kept for future extension.
-assert is_dataclass(Config)

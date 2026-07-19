@@ -84,8 +84,12 @@ class WhisperCppBackend(STTBackend):
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
         except asyncio.TimeoutError as e:
             # A wedged whisper-cli must not hang the transcribe loop forever.
-            await terminate_process(proc)
             raise STTError(f"whisper-cli timed out after {self._timeout}s") from e
+        finally:
+            # Terminate the child on ANY non-clean exit (timeout OR task
+            # cancellation during communicate); a clean exit already reaped it so
+            # this is a no-op there. Without it a CancelledError would orphan it.
+            await terminate_process(proc)
         if proc.returncode != 0:
             raise STTError(
                 f"whisper-cli exited {proc.returncode}: {stderr.decode('utf-8', 'replace')[:300]}"
