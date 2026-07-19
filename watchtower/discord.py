@@ -18,7 +18,7 @@ import re
 import aiohttp
 
 from .config import Config
-from .notify import Digest, Find, FindsRecap, GoLive, Notification, RollingUpdate, WebhookTest
+from .notify import Digest, Find, GoLive, Notification, RollingUpdate, WebhookTest
 from .util import truncate
 
 log = logging.getLogger("watchtower.discord")
@@ -143,15 +143,20 @@ def render_digest(note: Digest, *, max_desc: int) -> dict:
     return embed
 
 
-def render_finds_recap(note: FindsRecap) -> dict | None:
-    """Standalone end-of-stream "🔎 Finds" recap message.
+def render_finds_recap(note: Digest) -> dict | None:
+    """Standalone end-of-stream "🔎 Finds" recap message for a FINAL digest.
 
-    The full deduped list goes in the DESCRIPTION (4096-char cap) rather than an
-    embed field (1024) so a long stream's finds all render. Lines are dropped
-    whole (never mid-line) if the list somehow exceeds the cap, with a
-    ``… (+N more)`` tail so truncation is visible instead of silent.
+    Discord's embed-field cap (1024) can't hold a full stream's find list, so it
+    ships as its own follow-up message after the digest, driven from the Digest
+    note's ``finds``. The full deduped list goes in the DESCRIPTION (4096-char
+    cap); lines are dropped whole (never mid-line) if the list somehow exceeds the
+    cap, with a ``… (+N more)`` tail so truncation is visible instead of silent.
+
+    Returns None for a refined digest (the recap follows the final digest only;
+    the refined pass ~30 min later would just duplicate it) or when there is
+    nothing renderable.
     """
-    if not note.finds:
+    if note.refined or not note.finds:
         return None
     lines = [line for f in note.finds if (line := _find_line(f))]
     if not lines:
@@ -184,11 +189,12 @@ def render_test() -> dict:
     }
 
 
-def render(note: Notification, *, max_desc: int) -> tuple[str, dict | None]:
-    """Map a neutral notification to its ``(webhook kind, embed)`` for delivery.
+def render(note: Notification, *, max_desc: int) -> tuple[str, dict]:
+    """Map a neutral notification to its primary ``(webhook kind, embed)``.
 
-    ``embed`` is ``None`` when the payload renders to nothing (e.g. a finds recap
-    whose entries all have blank names). The caller then posts nothing.
+    A non-refined ``Digest`` carrying finds also has a standalone follow-up recap
+    message; that second embed is emitted by the poster (see ``DiscordPoster.post``
+    / ``render_finds_recap``), not returned here.
     """
     if isinstance(note, GoLive):
         return "announce", render_go_live(note)
@@ -196,8 +202,6 @@ def render(note: Notification, *, max_desc: int) -> tuple[str, dict | None]:
         return "update", render_rolling_update(note, max_desc=max_desc)
     if isinstance(note, Digest):
         return ("refined" if note.refined else "digest"), render_digest(note, max_desc=max_desc)
-    if isinstance(note, FindsRecap):
-        return "digest", render_finds_recap(note)
     if isinstance(note, WebhookTest):
         return "test", render_test()
     raise TypeError(f"unknown notification type: {type(note).__name__}")
@@ -240,13 +244,17 @@ class DiscordPoster:
     async def post(self, note: Notification, *, max_retries: int = 4) -> bool:
         """Deliver a neutral notification: render it here at the boundary, then POST.
 
-        Returns True when nothing needed rendering (e.g. an empty finds recap);
-        that is not a delivery failure.
+        A non-refined ``Digest`` with finds sends the digest embed and THEN a
+        standalone "🔎 Finds" recap embed (same webhook kind, best-effort: a recap
+        failure never affects the digest's returned result).
         """
         kind, embed = render(note, max_desc=self.cfg.discord.max_description_chars)
-        if embed is None:
-            return True
-        return await self.post_embed(kind, embed, max_retries=max_retries)
+        ok = await self.post_embed(kind, embed, max_retries=max_retries)
+        if isinstance(note, Digest):
+            recap = render_finds_recap(note)
+            if recap is not None:
+                await self.post_embed("digest", recap, max_retries=max_retries)
+        return ok
 
     async def post_embed(self, kind: str, embed: dict, *, max_retries: int = 4) -> bool:
         url = self.webhook_for(kind)

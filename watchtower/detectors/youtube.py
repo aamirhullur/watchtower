@@ -19,7 +19,8 @@ from dataclasses import dataclass
 
 import aiohttp
 
-from . import LiveEvent
+from . import LiveEvent, OfflineEvent
+from .base import Detector
 
 log = logging.getLogger("watchtower.detectors.youtube")
 
@@ -109,7 +110,7 @@ def parse_live_page(html: str) -> LiveInfo | None:
     return LiveInfo(video_id=video_id, title=title or "Live stream", url=url)
 
 
-class YouTubeDetector:
+class YouTubeDetector(Detector):
     """Polls a single YouTube channel and fires a callback on go-live/offline transitions."""
 
     def __init__(
@@ -121,6 +122,7 @@ class YouTubeDetector:
         offline_confirmations: int = 2,
     ):
         self.handle = handle.lstrip("@")
+        self.name = f"yt:{self.handle}"
         self.channel_name = channel_name
         self.poll_interval = max(1, poll_interval_minutes) * 60
         self.session = session
@@ -162,9 +164,9 @@ class YouTubeDetector:
 
     async def run(self, on_live, on_offline, stop: asyncio.Event) -> None:
         """Poll loop. Calls on_live(LiveEvent) on a fresh go-live and
-        on_offline(channel) once a previously-live stream has been confirmed gone
-        for ``offline_confirmations`` consecutive polls. Fetch errors are treated
-        as 'unknown'; they never advance the offline streak."""
+        on_offline(OfflineEvent) once a previously-live stream has been confirmed
+        gone for ``offline_confirmations`` consecutive polls. Fetch errors are
+        treated as 'unknown'; they never advance the offline streak."""
         while not stop.is_set():
             result = await self.poll_once()
             if result is FETCH_ERROR:
@@ -197,7 +199,7 @@ class YouTubeDetector:
                         )
                         self._current_video_id = None
                         self._not_live_streak = 0
-                        await on_offline("youtube", self.handle)
+                        await on_offline(OfflineEvent(platform="youtube", channel=self.handle))
 
             try:
                 await asyncio.wait_for(stop.wait(), timeout=self.poll_interval)

@@ -9,6 +9,7 @@ terms. Swap in a different adapter and this model stays untouched.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,13 @@ class RollingUpdate:
 @dataclass(frozen=True)
 class Digest:
     """An end-of-stream digest. ``refined`` marks the higher-quality pass written
-    from VOD captions that lands ~30 min after the final digest."""
+    from VOD captions that lands ~30 min after the final digest.
+
+    ``finds`` carries the full deduped discovery list for the stream. It is part
+    of the neutral payload (a future web/Slack sink would attach it to the digest
+    itself); only the Discord adapter splits it into a standalone follow-up
+    message because of its embed-field size cap.
+    """
 
     channel: str
     title: str
@@ -55,15 +62,6 @@ class Digest:
     summary: str
     links: tuple[str, ...] = ()
     refined: bool = False
-
-
-@dataclass(frozen=True)
-class FindsRecap:
-    """Standalone end-of-stream recap of every deduped find for the stream."""
-
-    channel: str
-    title: str
-    url: str
     finds: tuple[Find, ...] = ()
 
 
@@ -72,5 +70,17 @@ class WebhookTest:
     """A connectivity check ("does the webhook work?")."""
 
 
-Notification = GoLive | RollingUpdate | Digest | FindsRecap | WebhookTest
+Notification = GoLive | RollingUpdate | Digest | WebhookTest
 """Any neutral notification the domain can emit to a delivery adapter."""
+
+
+class NotificationSink(Protocol):
+    """A delivery sink for neutral notifications.
+
+    ``DiscordPoster`` (real webhooks) and ``DryRunPoster`` (prints embeds) both
+    implement this structurally; the domain (summarizer, pipeline) depends on the
+    Protocol, not a concrete poster. There is deliberately no fan-out/multiplexer
+    sink: there is only ever one live sink today, and unused machinery is exactly
+    what the audit flags elsewhere."""
+
+    async def post(self, note: Notification) -> bool: ...

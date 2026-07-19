@@ -263,6 +263,30 @@ class Database:
         for url in extract_urls(text):
             await self.add_link(stream_id, url, source, ts)
 
+    # ---- ingest steps (shared by the live pipeline and `simulate`) ------ #
+    async def persist_transcript_chunk(
+        self, stream_id: int, seq: int, started_at: str, text: str
+    ) -> None:
+        """Persist one transcript chunk and index the links it contains.
+
+        The single "add a transcript chunk" ingest step, shared by the live
+        pipeline and the `simulate` acceptance test so both drive the same code
+        rather than parallel copies. Callers gate on non-empty ``text``.
+        """
+        await self.add_chunk(stream_id, seq, started_at, text)
+        await self.add_links_from(stream_id, text, "transcript", started_at)
+
+    async def persist_chat_message(
+        self, stream_id: int, author: str, text: str, ts: str
+    ) -> None:
+        """Persist one chat message and index the links it contains.
+
+        The single "add a chat message" ingest step, shared by the live pipeline
+        and `simulate`.
+        """
+        await self.add_chat(stream_id, author, text, ts)
+        await self.add_links_from(stream_id, text, "chat", ts)
+
     async def links_for(self, stream_id: int) -> list[sqlite3.Row]:
         def _do():
             return self.conn.execute(

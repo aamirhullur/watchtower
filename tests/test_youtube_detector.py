@@ -39,8 +39,8 @@ async def _drive(script, *, offline_confirmations=2, initial_live_id=None):
     async def on_live(ev):
         events.append(("live", ev.video_id))
 
-    async def on_offline(platform, channel):
-        events.append(("offline", channel))
+    async def on_offline(event):
+        events.append(("offline", event.channel))
 
     det.poll_once = fake_poll  # type: ignore[assignment]
     await asyncio.wait_for(det.run(on_live, on_offline, stop), timeout=5)

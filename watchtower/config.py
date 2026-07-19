@@ -8,7 +8,9 @@ Each env-backed secret is referenced by name here and resolved at use-time so a
 
 from __future__ import annotations
 
+import dataclasses
 import os
+import typing
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
@@ -214,33 +216,20 @@ def _build(cls: type, data: Any):
     if not isinstance(data, dict):
         raise ConfigError(f"expected a mapping for {cls.__name__}, got {type(data).__name__}")
     kwargs: dict[str, Any] = {}
-    known = {f.name: f for f in fields(cls)}
+    known = {f.name for f in fields(cls)}
+    # `from __future__ import annotations` makes ``f.type`` a *string*, so resolve
+    # nested-dataclass fields from the real annotations instead of a hand-kept
+    # class-name map (which silently failed to recurse for any new nested config).
+    hints = typing.get_type_hints(cls)
     for key, value in data.items():
         if key not in known:
             raise ConfigError(f"unknown config key '{key}' in {cls.__name__}")
-        f = known[key]
-        ftype = f.type
-        # Resolve nested dataclasses declared via default_factory.
-        nested = _nested_dataclass(cls, f.name)
-        if nested is not None:
-            kwargs[key] = _build(nested, value)
+        ftype = hints.get(key)
+        if dataclasses.is_dataclass(ftype):
+            kwargs[key] = _build(ftype, value)
         else:
             kwargs[key] = value
     return cls(**kwargs)
-
-
-def _nested_dataclass(parent: type, field_name: str) -> type | None:
-    """Return the dataclass type for a nested field, if any."""
-    mapping = {
-        ("Config", "discord"): DiscordConfig,
-        ("Config", "stt"): SttConfig,
-        ("Config", "llm"): LlmConfig,
-        ("Config", "capture"): CaptureConfig,
-        ("Config", "refined_digest"): RefinedDigestConfig,
-        ("Config", "health"): HealthConfig,
-        ("HealthConfig", "ntfy"): NtfyConfig,
-    }
-    return mapping.get((parent.__name__, field_name))
 
 
 def load_config(path: str | Path) -> Config:

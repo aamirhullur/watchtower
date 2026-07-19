@@ -21,7 +21,6 @@ falls back to a stats-only post.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from ..config import LlmConfig
@@ -44,6 +43,8 @@ def build_argv(binary: str, model: str, workdir: str = "") -> list[str]:
 
 class CodexCliBackend(LLMBackend):
     name = "codex_cli"
+    _label = "codex"
+    _log = log
 
     def __init__(self, cfg: LlmConfig):
         self.cfg = cfg
@@ -51,34 +52,4 @@ class CodexCliBackend(LLMBackend):
 
     async def summarize(self, prompt: str) -> LLMResult:
         argv = build_argv(self.binary, self.cfg.model, self.cfg.workdir)
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *argv,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=self.cfg.workdir or None,
-            )
-        except FileNotFoundError:
-            return LLMResult(ok=False, error=f"codex binary not found: {self.binary}")
-
-        try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(input=prompt.encode("utf-8")),
-                timeout=self.cfg.timeout_seconds,
-            )
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            log.warning("codex CLI timed out after %ss", self.cfg.timeout_seconds)
-            return LLMResult(ok=False, error=f"timeout after {self.cfg.timeout_seconds}s")
-
-        if proc.returncode != 0:
-            err = stderr.decode("utf-8", "replace").strip()[:400]
-            log.warning("codex CLI exited %s: %s", proc.returncode, err)
-            return LLMResult(ok=False, error=f"exit {proc.returncode}: {err}")
-
-        text = stdout.decode("utf-8", "replace").strip()
-        if not text:
-            return LLMResult(ok=False, error="empty output from codex CLI")
-        return LLMResult(ok=True, text=text)
+        return await self._run_cli(argv, prompt)

@@ -17,8 +17,7 @@ from .chat.base import ChatMessage
 from .chat.youtube_ext import YouTubeExternalChatAdapter
 from .config import Config, WatchTarget
 from .db import Database
-from .detectors import LiveEvent
-from .detectors.youtube import YouTubeDetector
+from .detectors import LiveEvent, OfflineEvent, build_detectors
 from .discord import DiscordPoster
 from .health import HealthMonitor
 from .llm import build_digest_llm, build_llm
@@ -86,40 +85,21 @@ class App:
             # Daily retention prune.
             detector_tasks.append(asyncio.create_task(self._retention_loop(db), name="retention"))
 
-            # YouTube detectors (one per channel).
-            for t in cfg.watch:
-                if t.platform == "youtube" and t.enabled:
-                    det = YouTubeDetector(
-                        t.handle,
-                        t.display(),
-                        cfg.poll_interval_for(t),
-                        session,
-                        offline_confirmations=cfg.youtube_offline_confirmations,
-                    )
-                    detector_tasks.append(
-                        asyncio.create_task(
-                            det.run(self._on_live, self._on_offline, self.stop),
-                            name=f"yt:{t.handle}",
-                        )
-                    )
-
-            # Twitch: single detector covering all twitch targets.
-            twitch_targets = [t for t in cfg.watch if t.platform == "twitch" and t.enabled]
-            if twitch_targets:
-                from .detectors.twitch import TwitchDetector
-
-                det = TwitchDetector(cfg, twitch_targets, chat_router=self._twitch_chat_router)
+            # Platform detectors (YouTube: one per channel; Twitch: one shared,
+            # wired to the chat router). The factory owns that grouping and the
+            # lazy twitchio import.
+            for det in build_detectors(cfg, session, chat_router=self._twitch_chat_router):
                 detector_tasks.append(
                     asyncio.create_task(
                         det.run(self._on_live, self._on_offline, self.stop),
-                        name="twitch",
+                        name=det.name,
                     )
                 )
 
             log.info(
                 "watchtower running: %d youtube, %d twitch targets; stt=%s llm=%s",
                 sum(1 for t in cfg.watch if t.platform == "youtube" and t.enabled),
-                len(twitch_targets),
+                sum(1 for t in cfg.watch if t.platform == "twitch" and t.enabled),
                 cfg.stt.backend,
                 cfg.llm.backend,
             )
@@ -239,8 +219,8 @@ class App:
             self._refined_tasks.add(rt)
             rt.add_done_callback(self._refined_tasks.discard)
 
-    async def _on_offline(self, platform: str, channel: str) -> None:
-        key = (platform, channel.lower())
+    async def _on_offline(self, event: OfflineEvent) -> None:
+        key = (event.platform, event.channel.lower())
         sess = self._sessions.get(key)
         if sess is not None:
             log.info("stopping session for %s (offline)", key)

@@ -17,9 +17,8 @@ from .capture import CaptureSession, Chunk, build_ffmpeg_file_argv
 from .config import Config, WatchTarget
 from .db import Database
 from .detectors import LiveEvent
-from .discord import DiscordPoster
 from .health import HealthMonitor
-from .notify import GoLive
+from .notify import GoLive, NotificationSink
 from .stt.base import STTBackend, STTError
 from .summarize import Summarizer
 from .util import minimal_env, now_utc, parse_vtt, terminate_process, utc_iso
@@ -36,7 +35,7 @@ class StreamSession:
         db: Database,
         stt: STTBackend,
         summarizer: Summarizer,
-        poster: DiscordPoster,
+        poster: NotificationSink,
         health: HealthMonitor,
         chat_adapter=None,
     ):
@@ -164,8 +163,9 @@ class StreamSession:
                     continue
 
                 if text:
-                    await self.db.add_chunk(self.stream_id, chunk.seq, chunk.started_at, text)
-                    await self.db.add_links_from(self.stream_id, text, "transcript", chunk.started_at)
+                    await self.db.persist_transcript_chunk(
+                        self.stream_id, chunk.seq, chunk.started_at, text
+                    )
                 capture.cleanup_chunk(chunk)
             except asyncio.CancelledError:
                 raise
@@ -214,8 +214,7 @@ class StreamSession:
                     break
                 continue
             try:
-                await self.db.add_chat(self.stream_id, msg.author, msg.text, msg.ts)
-                await self.db.add_links_from(self.stream_id, msg.text, "chat", msg.ts)
+                await self.db.persist_chat_message(self.stream_id, msg.author, msg.text, msg.ts)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

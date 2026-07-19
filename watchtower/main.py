@@ -25,9 +25,9 @@ import aiohttp
 
 from .app import run_app
 from .config import Config, ConfigError, check_secrets, load_config
-from .discord import DiscordPoster, render
+from .discord import DiscordPoster, render, render_finds_recap
 from .llm import build_digest_llm, build_llm
-from .notify import Notification, WebhookTest
+from .notify import Digest, Notification, WebhookTest
 from .pipeline import chunk_local_file
 from .stt import build_stt
 from .summarize import Summarizer
@@ -58,8 +58,16 @@ class DryRunPoster:
         # Render at the same delivery boundary the real poster uses, then print
         # instead of POSTing.
         kind, embed = render(note, max_desc=self.cfg.discord.max_description_chars)
-        if embed is None:
-            return True
+        self._print(kind, embed)
+        # Mirror the real poster: a non-refined digest with finds prints the
+        # standalone "🔎 Finds" recap embed right after the digest.
+        if isinstance(note, Digest):
+            recap = render_finds_recap(note)
+            if recap is not None:
+                self._print("digest", recap)
+        return True
+
+    def _print(self, kind: str, embed: dict) -> None:
         label = _DRY_RUN_LABELS.get(kind, kind.upper())
         print(f"\n===== [{label}] =====")
         print(f"{embed.get('title', '')}")
@@ -70,7 +78,6 @@ class DryRunPoster:
         for field in embed.get("fields", []):
             print(f"\n[{field['name']}]\n{field['value']}")
         print("=" * 40)
-        return True
 
 
 # --------------------------------------------------------------------------- #
@@ -293,8 +300,7 @@ async def _simulate(cfg: Config, args) -> int:
                 while chat_idx < len(chat_events) and chat_events[chat_idx].offset_s <= covered_seconds:
                     ev = chat_events[chat_idx]
                     ts = utc_iso(base_time + timedelta(seconds=ev.offset_s))
-                    await db.add_chat(stream_id, ev.author, ev.text, ts)
-                    await db.add_links_from(stream_id, ev.text, "chat", ts)
+                    await db.persist_chat_message(stream_id, ev.author, ev.text, ts)
                     chat_idx += 1
                     chat_ingested += 1
 
@@ -315,8 +321,7 @@ async def _simulate(cfg: Config, args) -> int:
 
                 last_seq = seq
                 if text:
-                    await db.add_chunk(stream_id, seq, started_at, text)
-                    await db.add_links_from(stream_id, text, "transcript", started_at)
+                    await db.persist_transcript_chunk(stream_id, seq, started_at, text)
                     log.info("chunk %d/%d transcribed (%d chars)", i + 1, total, len(text))
 
                 if (i + 1) % per_window == 0:

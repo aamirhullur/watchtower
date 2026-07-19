@@ -15,9 +15,8 @@ from dataclasses import dataclass, field
 
 from .config import Config, WatchTarget
 from .db import Cursor, Database
-from .discord import DiscordPoster
 from .llm.base import LLMBackend
-from .notify import Digest, Find, FindsRecap, RollingUpdate
+from .notify import Digest, Find, NotificationSink, RollingUpdate
 from .util import deep_link, extract_urls, truncate
 
 log = logging.getLogger("watchtower.summarize")
@@ -312,7 +311,7 @@ class Summarizer:
         cfg: Config,
         db: Database,
         llm: LLMBackend,
-        poster: DiscordPoster,
+        poster: NotificationSink,
         digest_llm: LLMBackend | None = None,
     ):
         self.cfg = cfg
@@ -401,6 +400,9 @@ class Summarizer:
             llm=self.digest_llm,
         )
 
+        # The digest carries the full deduped finds list as part of the neutral
+        # payload. Splitting it into a standalone follow-up message is a Discord
+        # embed-size constraint and lives in the Discord adapter, not here.
         note = Digest(
             channel=target.display(),
             title=stream["title"] or "",
@@ -408,22 +410,10 @@ class Summarizer:
             summary=summary,
             links=tuple(links),
             refined=refined,
+            finds=tuple(Find(**f) for f in finds),
         )
         ok = await self.poster.post(note)
         await self.db.record_update(stream_id, "refined" if refined else "digest")
-
-        # The complete deduped finds list ships as its own follow-up message
-        # (embed description holds 4096 chars vs a field's 1024). Posted after
-        # the FINAL digest only; the refined digest ~30 min later would just
-        # duplicate it. Best-effort: a finds post failure never fails the digest.
-        if not refined and finds:
-            recap = FindsRecap(
-                channel=target.display(),
-                title=stream["title"] or "",
-                url=stream["url"] or "",
-                finds=tuple(Find(**f) for f in finds),
-            )
-            await self.poster.post(recap)
         return ok
 
     async def _extract_finds(self, stream_id: int, stream, window: Window) -> list[dict]:

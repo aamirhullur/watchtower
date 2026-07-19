@@ -10,7 +10,7 @@ from watchtower.discord import (
     render_rolling_update,
     render_test,
 )
-from watchtower.notify import Digest, Find, FindsRecap, GoLive, RollingUpdate, WebhookTest
+from watchtower.notify import Digest, Find, GoLive, RollingUpdate, WebhookTest
 
 
 def test_announce_embed():
@@ -80,14 +80,7 @@ def test_render_dispatch_routes_to_webhook_kinds():
     assert render(RollingUpdate(channel="c", title="t", url="u", summary="s"), max_desc=4096)[0] == "update"
     assert render(Digest(channel="c", title="t", url="u", summary="s"), max_desc=4096)[0] == "digest"
     assert render(Digest(channel="c", title="t", url="u", summary="s", refined=True), max_desc=4096)[0] == "refined"
-    assert render(FindsRecap(channel="c", title="t", url="u"), max_desc=4096)[0] == "digest"
     assert render(WebhookTest(), max_desc=4096)[0] == "test"
-
-
-def test_render_returns_none_embed_for_empty_finds_recap():
-    kind, embed = render(FindsRecap(channel="c", title="t", url="u", finds=(Find(name="  "),)), max_desc=4096)
-    assert kind == "digest"
-    assert embed is None
 
 
 def test_injected_markdown_link_in_summary_is_defanged():

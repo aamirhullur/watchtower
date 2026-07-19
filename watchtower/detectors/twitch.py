@@ -36,13 +36,16 @@ import os
 
 from ..config import Config, WatchTarget
 from ..util import now_utc, utc_iso
-from . import LiveEvent
+from . import LiveEvent, OfflineEvent
+from .base import Detector
 
 log = logging.getLogger("watchtower.detectors.twitch")
 
 
-class TwitchDetector:
+class TwitchDetector(Detector):
     """Manages one TwitchIO client covering all configured Twitch targets."""
+
+    name = "twitch"
 
     def __init__(self, cfg: Config, targets: list[WatchTarget], chat_router=None):
         self.cfg = cfg
@@ -111,7 +114,7 @@ class TwitchDetector:
             ).lower()
             log.info("twitch %s offline", login)
             if self._on_offline:
-                await self._on_offline("twitch", login)
+                await self._on_offline(OfflineEvent(platform="twitch", channel=login))
 
         async def _message(payload) -> None:
             if self.chat_router is None:

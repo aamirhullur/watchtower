@@ -14,7 +14,7 @@ from watchtower.discord import (
     render_rolling_update,
 )
 from watchtower.llm.base import LLMBackend, LLMResult
-from watchtower.notify import Digest, Find, FindsRecap, RollingUpdate
+from watchtower.notify import Digest, Find, RollingUpdate
 from watchtower.summarize import (
     Summarizer,
     assemble_window,
@@ -316,7 +316,7 @@ def test_finds_embed_renders_all_25_in_description():
         Find(name=f"tool{i}", detail=f"detail {i}", deeplink=f"https://y?t={i}s")
         for i in range(25)
     )
-    e = render_finds_recap(FindsRecap(channel="C", title="Stream T", url="https://u", finds=finds))
+    e = render_finds_recap(Digest(channel="C", title="Stream T", url="https://u", summary="s", finds=finds))
     assert e["title"].startswith("🔎 Finds: Stream T")
     for i in range(25):
         assert f"**tool{i}**: detail {i} [↗](https://y?t={i}s)" in e["description"]
@@ -324,13 +324,19 @@ def test_finds_embed_renders_all_25_in_description():
 
 
 def test_finds_embed_none_when_empty():
-    assert render_finds_recap(FindsRecap(channel="C", title="T", url="", finds=())) is None
-    assert render_finds_recap(FindsRecap(channel="C", title="T", url="", finds=(Find(name=" "),))) is None
+    assert render_finds_recap(Digest(channel="C", title="T", url="", summary="s", finds=())) is None
+    assert render_finds_recap(Digest(channel="C", title="T", url="", summary="s", finds=(Find(name=" "),))) is None
+
+
+def test_finds_embed_none_for_refined_digest():
+    # A refined digest never produces the standalone finds recap.
+    finds = (Find(name="K8 Plus", detail="mini pc"),)
+    assert render_finds_recap(Digest(channel="C", title="T", url="", summary="s", refined=True, finds=finds)) is None
 
 
 def test_finds_embed_overflow_drops_whole_lines_with_marker():
     finds = tuple(Find(name=f"n{i}" + "x" * 300, detail="y" * 200) for i in range(25))
-    e = render_finds_recap(FindsRecap(channel="C", title="T", url="", finds=finds))
+    e = render_finds_recap(Digest(channel="C", title="T", url="", summary="s", finds=finds))
     assert len(e["description"]) <= 4096
     # Truncation is visible and lands on a line boundary, never mid-line.
     last = e["description"].splitlines()[-1]
@@ -341,7 +347,7 @@ def test_finds_embed_overflow_drops_whole_lines_with_marker():
 
 def test_finds_embed_no_link_markup_when_deeplink_empty():
     e = render_finds_recap(
-        FindsRecap(channel="C", title="T", url="", finds=(Find(name="K8 Plus", detail="mini pc"),))
+        Digest(channel="C", title="T", url="", summary="s", finds=(Find(name="K8 Plus", detail="mini pc"),))
     )
     assert "**K8 Plus**: mini pc" in e["description"]
     assert "[↗]" not in e["description"]
@@ -454,19 +460,22 @@ async def _digest_fixture(tmp_path, name):
 
 
 @pytest.mark.asyncio
-async def test_post_digest_posts_followup_finds_message(tmp_path):
+async def test_post_digest_emits_single_digest_note_carrying_finds(tmp_path):
+    # D: the summarizer posts ONE neutral Digest note; the finds ride along on it.
+    # Splitting them into a second Discord message is the adapter's job, not the
+    # domain's (see test_discord_digest_sends_two_messages below).
     db, sid, target = await _digest_fixture(tmp_path, "pd.db")
     try:
         poster = StubPoster()
         s = Summarizer(Config(), db=db, llm=FakeLLM(text="digest text"), poster=poster)  # type: ignore[arg-type]
         assert await s.post_digest(sid, target)
-        # A Digest followed by a standalone FindsRecap (final digest only).
-        assert [type(n).__name__ for n in poster.posts] == ["Digest", "FindsRecap"]
-        recap = poster.posts[1]
-        assert isinstance(recap, FindsRecap)
-        assert recap.finds[0].name == "K8 Plus"
-        # Render at the delivery boundary to confirm the embed content is intact.
-        finds_embed = render_finds_recap(recap)
+        assert [type(n).__name__ for n in poster.posts] == ["Digest"]
+        note = poster.posts[0]
+        assert isinstance(note, Digest)
+        assert note.refined is False
+        assert note.finds[0].name == "K8 Plus"
+        # Render the adapter's follow-up from the note to confirm content is intact.
+        finds_embed = render_finds_recap(note)
         assert finds_embed["title"].startswith("🔎 Finds")
         assert "**K8 Plus**: mini pc" in finds_embed["description"]
         # Deep link from offset 60 -> t=30s.
@@ -476,14 +485,63 @@ async def test_post_digest_posts_followup_finds_message(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_post_digest_refined_skips_finds_message(tmp_path):
+async def test_post_digest_refined_note_produces_no_recap(tmp_path):
     db, sid, target = await _digest_fixture(tmp_path, "pr.db")
     try:
         poster = StubPoster()
         s = Summarizer(Config(), db=db, llm=FakeLLM(text="refined text"), poster=poster)  # type: ignore[arg-type]
         assert await s.post_digest(sid, target, refined=True)
-        # Only the refined digest; no standalone finds recap follows it.
+        # Still one Digest note; the adapter emits no standalone finds recap for it.
         assert [type(n).__name__ for n in poster.posts] == ["Digest"]
-        assert poster.posts[0].refined is True
+        note = poster.posts[0]
+        assert note.refined is True
+        assert render_finds_recap(note) is None
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_discord_digest_sends_two_messages(tmp_path):
+    # D: the two-message Discord behaviour is unchanged — the adapter posts the
+    # digest embed and THEN the standalone finds embed (same webhook kind, order).
+    from watchtower.discord import DiscordPoster
+
+    db, sid, target = await _digest_fixture(tmp_path, "dd.db")
+    try:
+        poster = DiscordPoster(Config())
+        sent: list[tuple[str, str]] = []
+
+        async def fake_post_embed(kind, embed, *, max_retries=4):
+            sent.append((kind, embed.get("title", "")))
+            return True
+
+        poster.post_embed = fake_post_embed  # type: ignore[assignment]
+        s = Summarizer(Config(), db=db, llm=FakeLLM(text="digest text"), poster=poster)
+        assert await s.post_digest(sid, target)
+        assert [k for k, _ in sent] == ["digest", "digest"]
+        assert sent[0][1].startswith("📄 Final digest")
+        assert sent[1][1].startswith("🔎 Finds")
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_discord_digest_recap_failure_does_not_fail_digest(tmp_path):
+    # Best-effort: a finds-recap post failure never changes the digest's result.
+    from watchtower.discord import DiscordPoster
+    from watchtower.notify import Digest as DigestNote
+
+    poster = DiscordPoster(Config())
+    calls = {"n": 0}
+
+    async def fake_post_embed(kind, embed, *, max_retries=4):
+        calls["n"] += 1
+        return calls["n"] == 1  # digest ok, recap fails
+
+    poster.post_embed = fake_post_embed  # type: ignore[assignment]
+    note = DigestNote(
+        channel="C", title="T", url="https://u", summary="s",
+        finds=(Find(name="K8 Plus", detail="mini pc"),),
+    )
+    assert await poster.post(note) is True
+    assert calls["n"] == 2  # both embeds attempted
