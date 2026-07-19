@@ -1,9 +1,12 @@
 # streamwatch
 
 A self-hosted information-gathering daemon. Point it at sources you care about
-and it turns them into structured, searchable knowledge — rolling summaries,
-digests, and a permanent database of 🔎 finds (products, tools, ideas worth
-knowing about) delivered to Discord via webhooks.
+and it turns them into structured, searchable knowledge: a permanent SQLite
+database of transcripts, chat, links, summaries, and 🔎 finds (products, tools,
+ideas worth knowing about). That store is the product — plain SQLite, queryable
+by anything. Notifications — rolling updates while live, digests, and finds
+recaps — currently ship to Discord via webhooks, but Discord is only the current
+delivery adapter over the store.
 
 The first source module is **livestreams** (YouTube + Twitch): it detects
 go-live, captures audio + chat, transcribes locally, and summarizes while the
