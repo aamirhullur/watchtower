@@ -74,3 +74,112 @@ def test_no_twitch_targets_does_not_import_twitch_module(monkeypatch):
     cfg = _cfg([WatchTarget(platform="youtube", handle="@a")])
     build_detectors(cfg, session=object())
     assert "watchtower.detectors.twitch" not in sys.modules
+
+
+# --- watchdog / reconcile poll (twitch.py hardening) -------------------------
+
+
+class _FakeStreamUser:
+    def __init__(self, uid, name):
+        self.id = uid
+        self.name = name
+
+
+class _FakeStream:
+    def __init__(self, uid, name, title):
+        self.user = _FakeStreamUser(uid, name)
+        self.title = title
+
+
+class _FakeStreamsClient:
+    def __init__(self, streams):
+        self._streams = streams
+        self.calls = []
+
+    def fetch_streams(self, **kw):
+        self.calls.append(kw)
+
+        async def _gen():
+            for s in self._streams:
+                yield s
+
+        return _gen()
+
+
+def _twitch(targets, chat_router=None):
+    cfg = _cfg(targets)
+    return TwitchDetector(cfg, [t for t in targets if t.platform == "twitch"], chat_router)
+
+
+def test_poll_live_now_fires_on_live_with_uid_video_id():
+    import asyncio
+
+    det = _twitch([WatchTarget(platform="twitch", handle="theo")])
+    det._uid_to_login = {"146593057": "theo"}
+    events = []
+
+    async def on_live(ev):
+        events.append(ev)
+
+    det._on_live = on_live
+    client = _FakeStreamsClient([_FakeStream("146593057", "theo", "shipping code")])
+    asyncio.run(det._poll_live_now(client, bot_uid="481015872"))
+
+    assert len(events) == 1
+    ev = events[0]
+    # video_id must mirror the EventSub handler (broadcaster uid) so the app's
+    # session dedupe treats poll-detected and event-detected go-lives as one.
+    assert ev.video_id == "146593057"
+    assert ev.channel == "theo"
+    assert ev.title == "shipping code"
+    assert client.calls[0]["type"] == "live"
+
+
+def test_poll_live_now_no_targets_is_noop():
+    import asyncio
+
+    det = _twitch([WatchTarget(platform="twitch", handle="theo")])
+    det._uid_to_login = {}
+    client = _FakeStreamsClient([])
+    asyncio.run(det._poll_live_now(client, bot_uid="1"))
+    assert client.calls == []
+
+
+def test_expected_sub_count_tracks_chat_router():
+    det = _twitch([WatchTarget(platform="twitch", handle="a")])
+    det._uid_to_login = {"1": "a", "2": "b"}
+    assert det._expected_sub_count() == 4
+
+    async def router(*a):
+        return None
+
+    det_chat = _twitch([WatchTarget(platform="twitch", handle="a")], chat_router=router)
+    det_chat._uid_to_login = {"1": "a", "2": "b"}
+    assert det_chat._expected_sub_count() == 6
+
+
+def test_subscribe_all_ignores_duplicate_409():
+    import asyncio
+    from types import SimpleNamespace
+
+    # Stub payload factories: twitchio is an optional extra, not a test dep.
+    eventsub = SimpleNamespace(
+        StreamOnlineSubscription=lambda **kw: ("online", kw),
+        StreamOfflineSubscription=lambda **kw: ("offline", kw),
+        ChatMessageSubscription=lambda **kw: ("chat", kw),
+    )
+
+    det = _twitch([WatchTarget(platform="twitch", handle="a")])
+    det._uid_to_login = {"1": "a"}
+
+    class _Client:
+        def __init__(self):
+            self.n = 0
+
+        async def subscribe_websocket(self, **kw):
+            self.n += 1
+            raise RuntimeError("Request failed with status 409: subscription already exists")
+
+    client = _Client()
+    asyncio.run(det._subscribe_all(client, eventsub, bot_uid="9"))
+    assert client.n == 2
