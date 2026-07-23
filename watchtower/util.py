@@ -44,7 +44,9 @@ def minimal_env() -> dict[str, str]:
     which they have no need for. LLM subprocesses deliberately keep the full env.
     """
     env: dict[str, str] = {}
-    for key in ("PATH", "HOME", "LANG"):
+    # LD_LIBRARY_PATH is not a secret and whisper-cli needs it to locate
+    # libwhisper.so (the deploy co-locates its shared libs in /opt/whisper/bin).
+    for key in ("PATH", "HOME", "LANG", "LD_LIBRARY_PATH"):
         val = os.environ.get(key)
         if val:
             env[key] = val
