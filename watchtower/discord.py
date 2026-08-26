@@ -210,11 +210,15 @@ def render(note: Notification, *, max_desc: int) -> tuple[str, dict]:
 class DiscordPoster:
     """Posts embeds to purpose-specific webhooks with 429 handling."""
 
-    def __init__(self, cfg: Config, session: aiohttp.ClientSession | None = None, health=None):
+    def __init__(self, cfg: Config, session: aiohttp.ClientSession | None = None, health=None, db=None):
         self.cfg = cfg
         self._session = session
         self._own_session = session is None
         self.health = health
+        # Thread store: needs get_thread_id/set_thread_id coroutines (Database
+        # supplies them). Absent => threads mode falls back to flat posting so the
+        # webhook-test path can construct a poster without a DB.
+        self.db = db
 
     async def __aenter__(self) -> "DiscordPoster":
         if self._session is None:
@@ -240,15 +244,28 @@ class DiscordPoster:
         }.get(kind, "")
         return override or self._default_webhook()
 
+    def _forum_webhook(self) -> str:
+        """The single webhook used in threads mode (all kinds share one forum channel)."""
+        return self.cfg.discord.forum_webhook or self._default_webhook()
+
+    def _threads_enabled(self) -> bool:
+        return bool(self.cfg.discord.threads and self.db is not None)
+
     # ---- posting ------------------------------------------------------- #
-    async def post(self, note: Notification, *, max_retries: int = 4) -> bool:
+    async def post(self, note: Notification, *, thread_key: str | None = None, max_retries: int = 4) -> bool:
         """Deliver a neutral notification: render it here at the boundary, then POST.
 
         A non-refined ``Digest`` with finds sends the digest embed and THEN a
-        standalone "🔎 Finds" recap embed (same webhook kind, best-effort: a recap
-        failure never affects the digest's returned result).
+        standalone "🔎 Finds" recap embed (best-effort: a recap failure never
+        affects the digest's returned result).
+
+        ``thread_key`` is a neutral grouping hint ("these notifications belong to
+        the same stream"). In threads mode the Discord adapter maps it to one forum
+        thread: the first post for a key creates the thread, later posts land in it.
         """
         kind, embed = render(note, max_desc=self.cfg.discord.max_description_chars)
+        if thread_key is not None and self._threads_enabled():
+            return await self._post_threaded(note, embed, thread_key, max_retries=max_retries)
         ok = await self.post_embed(kind, embed, max_retries=max_retries)
         if isinstance(note, Digest):
             recap = render_finds_recap(note)
@@ -256,11 +273,74 @@ class DiscordPoster:
                 await self.post_embed("digest", recap, max_retries=max_retries)
         return ok
 
+    # ---- threaded posting (Discord forum channel) ---------------------- #
+    async def _post_threaded(
+        self, note: Notification, embed: dict, thread_key: str, *, max_retries: int
+    ) -> bool:
+        """Deliver a notification into its stream's forum thread.
+
+        The first post for ``thread_key`` (normally the go-live) creates the thread
+        and records its id; every later post for the same key posts into it. A
+        Digest's finds recap follows into the same thread.
+        """
+        url = self._forum_webhook()
+        if not url:
+            log.error("no forum webhook configured (set $%s or discord.forum_webhook)", self.cfg.discord.default_webhook_env)
+            return False
+
+        thread_id = await self.db.get_thread_id(thread_key)
+        if thread_id is None:
+            thread_id = await self._create_thread(url, self._thread_name(note), embed, max_retries=max_retries)
+            if thread_id is None:
+                if self.health is not None:
+                    await self.health.record_failure("discord", f"create thread key={thread_key} failed")
+                return False
+            await self.db.set_thread_id(thread_key, thread_id)
+            ok = True
+        else:
+            ok, status = await self._post_into_thread(url, thread_id, embed, max_retries=max_retries)
+            if not ok:
+                if status == 404:
+                    # The stored thread is gone server-side (deleted). Clear the
+                    # stale mapping so the NEXT post for this key recreates a fresh
+                    # thread instead of 404-ing forever. Deliberately no inline
+                    # recreate here: next-post recreation keeps the flow simple.
+                    await self.db.delete_thread_id(thread_key)
+                if self.health is not None:
+                    await self.health.record_failure("discord", f"post into thread key={thread_key} failed")
+
+        if isinstance(note, Digest):
+            recap = render_finds_recap(note)
+            if recap is not None:
+                # Best-effort recap: it never changes the returned result, but a
+                # failure is surfaced to health (matching the flat path's
+                # post_embed) instead of being swallowed silently.
+                recap_ok, _ = await self._post_into_thread(url, thread_id, recap, max_retries=max_retries)
+                if not recap_ok and self.health is not None:
+                    await self.health.record_failure("discord", f"finds recap into thread key={thread_key} failed")
+        return ok
+
+    @staticmethod
+    def _thread_name(note: Notification) -> str:
+        """Forum thread title for a stream (Discord caps thread names at 100 chars)."""
+        if isinstance(note, GoLive):
+            return truncate(f"🔴 LIVE: {note.title or note.channel}", 100)
+        title = getattr(note, "title", "") or getattr(note, "channel", "") or "watchtower"
+        return truncate(title, 100)
+
     async def post_embed(self, kind: str, embed: dict, *, max_retries: int = 4) -> bool:
         url = self.webhook_for(kind)
         if not url:
             log.error("no webhook configured for kind=%s (set $%s)", kind, self.cfg.discord.default_webhook_env)
             return False
+        ok = await self._post(url, self._payload(embed), max_retries=max_retries)
+        if not ok and self.health is not None:
+            # Cursor has already advanced (we don't re-summarize); surface the lost
+            # post to health so a broken webhook is visible instead of silent.
+            await self.health.record_failure("discord", f"post kind={kind} failed all retries")
+        return ok
+
+    def _payload(self, embed: dict, *, thread_name: str | None = None) -> dict:
         payload = {
             "username": self.cfg.discord.username,
             "embeds": [embed],
@@ -268,18 +348,69 @@ class DiscordPoster:
             # made it into the embed.
             "allowed_mentions": {"parse": []},
         }
-        ok = await self._post(url, payload, max_retries=max_retries)
-        if not ok and self.health is not None:
-            # Cursor has already advanced (we don't re-summarize); surface the lost
-            # post to health so a broken webhook is visible instead of silent.
-            await self.health.record_failure("discord", f"post kind={kind} failed all retries")
-        return ok
+        if thread_name is not None:
+            # thread_name on a forum-channel webhook creates a new thread (post).
+            payload["thread_name"] = thread_name
+        return payload
+
+    async def _create_thread(self, url: str, thread_name: str, embed: dict, *, max_retries: int) -> str | None:
+        """Create a forum thread whose root message is ``embed``; return its thread id.
+
+        Needs ``?wait=true`` so Discord returns the created message, whose
+        ``channel_id`` is the new thread (that later updates post into). Returns
+        None on failure or if the response lacks the id.
+
+        Known limitation (accepted): the create POST is not idempotent. On a
+        timeout-then-retry, Discord may already have created the thread but the
+        response was lost, so the retry creates a SECOND forum thread. We accept
+        this rare duplicate rather than add server-side dedup (which a webhook,
+        with no bot token, can't easily do).
+        """
+        ok, data, _ = await self._send(
+            url, self._payload(embed, thread_name=thread_name), params={"wait": "true"}, max_retries=max_retries
+        )
+        if not ok or not data:
+            return None
+        thread_id = data.get("channel_id")
+        return str(thread_id) if thread_id else None
+
+    async def _post_into_thread(
+        self, url: str, thread_id: str, embed: dict, *, max_retries: int
+    ) -> tuple[bool, int | None]:
+        """Post ``embed`` into an existing forum thread; return (ok, last-status).
+
+        The status lets the caller detect a definitive 404 (the stored thread was
+        deleted server-side) and clear the stale mapping.
+        """
+        ok, _, status = await self._send(
+            url, self._payload(embed), params={"thread_id": thread_id}, max_retries=max_retries
+        )
+        return ok, status
 
     async def _post(self, url: str, payload: dict, *, max_retries: int) -> bool:
+        ok, _, _ = await self._send(url, payload, max_retries=max_retries)
+        return ok
+
+    async def _send(
+        self, url: str, payload: dict, *, params: dict | None = None, max_retries: int = 4
+    ) -> tuple[bool, dict | None, int | None]:
+        """POST an embed payload, returning (ok, response-json, last-status).
+
+        Response json is parsed only when ``?wait=true`` was requested (thread
+        creation); flat posts return (ok, None, status). ``last-status`` is the
+        last HTTP status observed, or None if every attempt raised before any
+        response (e.g. all timeouts), so callers can act on a definitive 4xx (a
+        404 posting into a deleted thread). Shares 429 back-off and 5xx retry.
+        """
         assert self._session is not None
+        want_json = bool(params and params.get("wait") == "true")
+        last_status: int | None = None
         for attempt in range(1, max_retries + 1):
             try:
-                async with self._session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                async with self._session.post(
+                    url, params=params, json=payload, timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    last_status = resp.status
                     if resp.status == 429:
                         # Cap the honoured back-off so a hostile/buggy Retry-After
                         # can't park the poster for minutes.
@@ -288,18 +419,24 @@ class DiscordPoster:
                         await asyncio.sleep(retry_after)
                         continue
                     if 200 <= resp.status < 300:
-                        return True
+                        data = None
+                        if want_json:
+                            try:
+                                data = await resp.json()
+                            except Exception:
+                                data = None
+                        return True, data, resp.status
                     body = await resp.text()
                     log.error("discord POST failed status=%s body=%s", resp.status, truncate(body, 300))
                     if 500 <= resp.status < 600:
                         await asyncio.sleep(min(2**attempt, 30))
                         continue
-                    return False
+                    return False, None, resp.status
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 log.warning("discord POST error: %s (attempt %d)", e, attempt)
                 await asyncio.sleep(min(2**attempt, 30))
         log.error("discord POST giving up after %d attempts", max_retries)
-        return False
+        return False, None, last_status
 
     @staticmethod
     async def _retry_after(resp: aiohttp.ClientResponse) -> float:

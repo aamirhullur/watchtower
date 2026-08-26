@@ -59,6 +59,32 @@ async def test_db_roundtrip_and_cursor_dedup(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_thread_id_roundtrip_and_overwrite(tmp_path):
+    db = Database(str(tmp_path / "th.db"))
+    await db.connect()
+    try:
+        # Unknown key -> None so the first post for a stream creates a thread.
+        assert await db.get_thread_id("s1") is None
+        await db.set_thread_id("s1", "111")
+        assert await db.get_thread_id("s1") == "111"
+        # INSERT OR REPLACE overwrites the same primary key in place.
+        await db.set_thread_id("s1", "222")
+        assert await db.get_thread_id("s1") == "222"
+        # Distinct keys are independent.
+        await db.set_thread_id("s2", "333")
+        assert await db.get_thread_id("s1") == "222"
+        assert await db.get_thread_id("s2") == "333"
+        # delete_thread_id clears one key (used when a thread is 404 gone) and is a
+        # no-op on an unknown key.
+        await db.delete_thread_id("s1")
+        assert await db.get_thread_id("s1") is None
+        assert await db.get_thread_id("s2") == "333"
+        await db.delete_thread_id("never-existed")  # no error
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_prune_old_streams(tmp_path):
     db = Database(str(tmp_path / "r.db"))
     await db.connect()
@@ -69,6 +95,8 @@ async def test_prune_old_streams(tmp_path):
             await db.add_chunk(sid, 1, "ts", txt)
             await db.add_chat(sid, "a", "hi", "ts")
             await db.add_link(sid, f"https://x/{sid}", "chat", "ts")
+            # discord_threads is keyed by the stringified stream id (thread_key).
+            await db.set_thread_id(str(sid), f"thread-{sid}")
         await db.end_stream(old)
         await db.end_stream(new)
         # Backdate the old stream's ended_at well past the retention window.
@@ -85,9 +113,12 @@ async def test_prune_old_streams(tmp_path):
         assert await db.chat_since(old, 0) == []
         assert await db.links_for(old) == []
         assert await db.get_stream(old) is not None
+        # Old stream's forum-thread mapping is cleared (keyed by str(stream_id)).
+        assert await db.get_thread_id(str(old)) is None
         # Recent stream is untouched.
         assert "new text" in await db.all_transcript(new)
         assert len(await db.links_for(new)) == 1
+        assert await db.get_thread_id(str(new)) == f"thread-{new}"
 
         # 0/negative disables pruning.
         assert await db.prune_old_streams(0) == 0

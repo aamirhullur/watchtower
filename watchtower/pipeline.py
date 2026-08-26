@@ -129,7 +129,7 @@ class StreamSession:
             title=self.event.title,
             url=self.event.url,
         )
-        await self.poster.post(note)
+        await self.poster.post(note, thread_key=str(self.stream_id))
 
     async def _transcribe_loop(self, capture: CaptureSession) -> None:
         assert self.stream_id is not None

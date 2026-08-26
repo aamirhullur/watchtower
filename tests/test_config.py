@@ -59,6 +59,28 @@ def test_watch_bad_platform_rejected(tmp_path):
         load_config(write(tmp_path, "watch:\n  - platform: tiktok\n    handle: x\n"))
 
 
+def test_discord_threads_config_parses(tmp_path):
+    cfg = load_config(
+        write(
+            tmp_path,
+            """
+            discord:
+              threads: true
+              forum_webhook: https://discord.test/forum
+            watch: []
+            """,
+        )
+    )
+    assert cfg.discord.threads is True
+    assert cfg.discord.forum_webhook == "https://discord.test/forum"
+
+
+def test_discord_threads_default_off(tmp_path):
+    cfg = load_config(write(tmp_path, "watch: []\n"))
+    assert cfg.discord.threads is False
+    assert cfg.discord.forum_webhook == ""
+
+
 def test_check_secrets_reports_missing(tmp_path, monkeypatch):
     monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
     monkeypatch.delenv("TWITCH_CLIENT_ID", raising=False)
@@ -78,6 +100,67 @@ def test_check_secrets_reports_missing(tmp_path, monkeypatch):
     joined = "\n".join(warnings)
     assert "DISCORD_WEBHOOK_URL" in joined
     assert "TWITCH_CLIENT_ID" in joined
+
+
+def test_check_secrets_threads_warns_when_no_forum_or_default(tmp_path, monkeypatch):
+    # threads mode ignores the per-purpose overrides, so having them all set must
+    # NOT satisfy the check: without forum_webhook or the env default, every post
+    # would fail at runtime. check_secrets must surface that.
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    cfg = load_config(
+        write(
+            tmp_path,
+            """
+            llm:
+              backend: none
+            discord:
+              threads: true
+              announce_webhook: https://discord.test/announce
+              update_webhook: https://discord.test/update
+              digest_webhook: https://discord.test/digest
+            watch: []
+            """,
+        )
+    )
+    warnings = check_secrets(cfg)
+    joined = "\n".join(warnings)
+    assert "discord.threads" in joined
+    assert "forum_webhook" in joined
+
+
+def test_check_secrets_threads_clean_with_forum_webhook(tmp_path, monkeypatch):
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    cfg = load_config(
+        write(
+            tmp_path,
+            """
+            llm:
+              backend: none
+            discord:
+              threads: true
+              forum_webhook: https://discord.test/forum
+            watch: []
+            """,
+        )
+    )
+    assert check_secrets(cfg) == []
+
+
+def test_check_secrets_threads_clean_with_env_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.test/webhook")
+    cfg = load_config(
+        write(
+            tmp_path,
+            """
+            llm:
+              backend: none
+            discord:
+              threads: true
+            watch: []
+            """,
+        )
+    )
+    assert check_secrets(cfg) == []
 
 
 def test_check_secrets_clean_when_present(tmp_path, monkeypatch):

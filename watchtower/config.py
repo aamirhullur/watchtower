@@ -47,6 +47,15 @@ class DiscordConfig:
     username: str = "watchtower"
     # Discord embed description hard cap is 4096; we stay well under it.
     max_description_chars: int = 3800
+    # Group each stream's posts under one Discord forum thread: the go-live creates
+    # the thread ("XYZ is live"), every later update/digest/finds recap posts into
+    # it. Requires the target channel to be a Forum channel and a single webhook
+    # (forum_webhook, else the default DISCORD_WEBHOOK_URL) pointing at it; the
+    # per-purpose announce/update/digest overrides are ignored in this mode.
+    threads: bool = False
+    # Optional dedicated webhook for the forum channel used in threads mode.
+    # Empty => fall back to env DISCORD_WEBHOOK_URL.
+    forum_webhook: str = ""
 
 
 @dataclass
@@ -293,8 +302,17 @@ def check_secrets(cfg: Config) -> list[str]:
     def missing(env_name: str) -> bool:
         return not os.environ.get(env_name)
 
-    # Discord: at least the default webhook, unless every purpose is overridden in YAML.
-    if missing(cfg.discord.default_webhook_env) and not all(
+    # Discord webhooks. Threads mode routes every post through the single forum
+    # webhook (forum_webhook, else the env default); the per-purpose overrides are
+    # ignored in that mode, so they must NOT satisfy the check. Flat mode needs at
+    # least the default webhook unless every purpose is overridden in YAML.
+    if cfg.discord.threads:
+        if not cfg.discord.forum_webhook and missing(cfg.discord.default_webhook_env):
+            warnings.append(
+                f"discord.threads on but no forum webhook: set discord.forum_webhook "
+                f"or ${cfg.discord.default_webhook_env}"
+            )
+    elif missing(cfg.discord.default_webhook_env) and not all(
         (cfg.discord.announce_webhook, cfg.discord.update_webhook, cfg.discord.digest_webhook)
     ):
         warnings.append(f"${cfg.discord.default_webhook_env} not set and no full per-purpose webhook overrides")

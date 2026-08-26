@@ -360,7 +360,7 @@ class Summarizer:
             links=tuple(window.links),
             finds=tuple(Find(**f) for f in finds),
         )
-        ok = await self.poster.post(note)
+        ok = await self.poster.post(note, thread_key=str(stream_id))
         # Advance cursor regardless of Discord success so we don't re-summarize.
         await self.db.record_update(stream_id, "update", window.cursor)
         return ok
@@ -412,7 +412,7 @@ class Summarizer:
             refined=refined,
             finds=tuple(Find(**f) for f in finds),
         )
-        ok = await self.poster.post(note)
+        ok = await self.poster.post(note, thread_key=str(stream_id))
         await self.db.record_update(stream_id, "refined" if refined else "digest")
         return ok
 

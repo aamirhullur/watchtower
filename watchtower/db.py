@@ -83,6 +83,12 @@ CREATE TABLE IF NOT EXISTS finds (
     created_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_finds_stream ON finds(stream_id, offset_seconds);
+
+CREATE TABLE IF NOT EXISTS discord_threads (
+    thread_key  TEXT PRIMARY KEY,   -- stable grouping key (stream id as text)
+    thread_id   TEXT NOT NULL,      -- Discord forum thread (channel) id
+    created_at  TEXT NOT NULL
+);
 """
 
 
@@ -173,6 +179,45 @@ class Database:
             ).fetchone()
 
         return await self._run(_do)
+
+    # ---- discord threads ----------------------------------------------- #
+    async def get_thread_id(self, thread_key: str) -> str | None:
+        """Return the Discord forum thread id previously created for this key, if any.
+
+        Persisted so a stream's thread survives a service restart mid-stream: later
+        updates keep landing in the same thread instead of starting a new one.
+        """
+        def _do():
+            row = self.conn.execute(
+                "SELECT thread_id FROM discord_threads WHERE thread_key=?", (thread_key,)
+            ).fetchone()
+            return row["thread_id"] if row else None
+
+        return await self._run(_do)
+
+    async def set_thread_id(self, thread_key: str, thread_id: str) -> None:
+        def _do() -> None:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO discord_threads(thread_key, thread_id, created_at) VALUES(?,?,?)",
+                (thread_key, thread_id, utc_iso()),
+            )
+            self.conn.commit()
+
+        await self._run(_do)
+
+    async def delete_thread_id(self, thread_key: str) -> None:
+        """Forget a stream's forum-thread mapping.
+
+        Called when Discord reports the stored thread is gone (a definitive 404 on
+        a post into it, e.g. the thread was deleted server-side). Clearing the
+        stale id lets the NEXT post for this key recreate a fresh thread instead of
+        404-ing forever.
+        """
+        def _do() -> None:
+            self.conn.execute("DELETE FROM discord_threads WHERE thread_key=?", (thread_key,))
+            self.conn.commit()
+
+        await self._run(_do)
 
     # ---- transcript ---------------------------------------------------- #
     async def add_chunk(self, stream_id: int, seq: int, started_at: str, text: str) -> None:
@@ -383,6 +428,13 @@ class Database:
             qmarks = ",".join("?" * len(ids))
             for table in ("transcript_chunks", "chat_messages", "links", "finds"):
                 self.conn.execute(f"DELETE FROM {table} WHERE stream_id IN ({qmarks})", ids)
+            # discord_threads is keyed by thread_key (TEXT holding str(stream_id)),
+            # not the INT stream_id the other tables use, so delete by the
+            # stringified ids or the forum-thread mapping leaks forever.
+            str_ids = [str(i) for i in ids]
+            self.conn.execute(
+                f"DELETE FROM discord_threads WHERE thread_key IN ({qmarks})", str_ids
+            )
             self.conn.commit()
             return len(ids)
 

@@ -60,7 +60,7 @@ class App:
         session = aiohttp.ClientSession()
         try:
             health = HealthMonitor(cfg.health, session=session)
-            poster = DiscordPoster(cfg, session=session, health=health)
+            poster = DiscordPoster(cfg, session=session, health=health, db=db)
             stt = build_stt(cfg.stt)
             llm = build_llm(cfg.llm)
             summarizer = Summarizer(cfg, db, llm, poster, digest_llm=build_digest_llm(cfg.llm))

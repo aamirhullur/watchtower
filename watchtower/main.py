@@ -264,7 +264,7 @@ async def _simulate(cfg: Config, args) -> int:
         # skips STT entirely so LLM-comparison runs never touch whisper/groq.
         stt = None if transcripts_in else build_stt(cfg.stt)
         llm = build_llm(cfg.llm)
-        poster = DryRunPoster(cfg) if args.dry_run else DiscordPoster(cfg)
+        poster = DryRunPoster(cfg) if args.dry_run else DiscordPoster(cfg, db=db)
         summarizer = Summarizer(cfg, db, llm, poster, digest_llm=build_digest_llm(cfg.llm))
         target = WatchTarget(platform="simulate", handle="simulate", name=args.name)
 
